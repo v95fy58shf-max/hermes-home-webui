@@ -1,35 +1,49 @@
 # Hermes Home
 
-Hermes Home is a thin household layer around Hermes Agent. It keeps the Hermes upstream package updateable while adding multi-member WeChat gateways, a home master gateway, and long-term family logs.
+Hermes Home is a thin household layer around Hermes Agent. Hermes remains updateable and replaceable; the family logic lives outside Hermes in this directory.
 
-## Architecture
+## Runtime Shape
 
-- `home-master` is the main Hermes profile. It owns family aggregation, long-term family logs, and response generation.
-- Slave profiles such as `wechat2`, `wechat3`, etc. each bind one WeChat account independently.
-- Each slave runs the `home-slave-relay` plugin. Incoming messages are forwarded to the local master gateway at `127.0.0.1:18080`.
-- Web UI creates and starts slave gateways, allocates ports, clears copied channel credentials, and registers the slave in `/opt/hermes-home/config.yaml`.
-- Family logs are stored in `/opt/hermes-home/home.db`. They are retrieved only when relevant and are not mixed into ordinary personal chat context.
+- `home-master` is the main household gateway.
+- Slave profiles such as `wechat2` and `wechat3` each bind one WeChat account independently.
+- Each slave runs `home-slave-relay` and forwards incoming messages to the master gateway.
+- Web UI creates slave gateways, allocates ports, clears copied channel credentials, and registers slaves in `/opt/hermes-home/config.yaml`.
 
-## What Is Not Published
+## Phase 1
 
-Do not commit runtime state:
+Phase 1 built the family chat layer:
 
-- model API keys or provider credentials
-- WeChat token, account ID, QR login state, cookies, or OpenIDs
-- `/root/.hermes` profiles, sessions, memories, and credentials
-- `/opt/hermes-home/home.db`
-- Web UI auth token and Web UI runtime database
+- multi-WeChat independent profiles
+- master/slave gateway relay
+- Web UI gateway creation
+- per-gateway channel configuration
+- first binding identity onboarding
+- gateway display-name sync
+- independent family logs
+- family-log skill for Hermes
 
-This repository includes only source code and examples.
+## Phase 2
 
-## Files
+Phase 2 starts the family state system:
 
-- `master_gateway.py`: local home master HTTP gateway.
-- `config.example.yaml`: sanitized example config.
-- `plugins/home_slave_relay`: Hermes plugin installed into each slave profile.
-- `skills/family-logs/SKILL.md`: skill telling Hermes how to use and save family logs.
-- `systemd/hermes-home-master.service`: systemd service template.
-- `scripts/install-home-master.sh`: simple installer for the master gateway.
+- `core/event_bus.py`: canonical event entry point for WeChat messages and future device/NAS events.
+- `core/state_engine.py`: turns events into structured long-term states.
+- `core/privacy.py`: defines privacy scopes for event, memory, and state.
+- `core/decay_worker.py`: applies TTL, importance, confidence, decay, and archival.
+- `core/memory_router.py`: chooses relevant state/log retrieval and filters by privacy scope.
+- `core/relationship_graph.py`: tracks trust, tension, and support between members.
+- `analyzers/`: low-token expert analyzers for emotion, sleep, family relation, and elderly health.
+
+## Privacy
+
+Hermes Home should transfer state, not private raw content.
+
+Example:
+
+- Raw child message: "I hate mom"
+- Raw scope: `private`
+- Shared output: "child family relationship tension is elevated"
+- Shared scope: `summary_only`
 
 ## Install
 
@@ -40,26 +54,12 @@ sudo nano /opt/hermes-home/config.yaml
 sudo systemctl start hermes-home-master.service
 ```
 
-Then start Hermes Web UI. On the Gateway page, click "新建网关" to create slave gateways. Each new gateway uses the next available port and starts with empty channel settings.
+## Do Not Publish Runtime State
 
-## First WeChat Binding
+Do not commit:
 
-When a newly bound WeChat account sends its first message, the master gateway asks the member to introduce themselves. Replies like these set the gateway display name:
-
-- `我是妈妈`
-- `我叫张三`
-- `叫我小王`
-
-The display name is saved in `/opt/hermes-home/config.yaml` and shown in Web UI.
-
-## Family Logs
-
-Family logs are durable household facts. Save candidates include:
-
-- multi-person decisions
-- appointments, deadlines, travel, school or work events
-- health and care facts
-- achievements and milestones
-- stable household preferences or constraints
-
-Family logs can be searched, filtered by importance, edited, and deleted in Web UI.
+- model API keys or provider credentials
+- WeChat token, account ID, QR login state, cookies, or OpenIDs
+- `/root/.hermes` profiles, sessions, memories, and credentials
+- `/opt/hermes-home/home.db`
+- Web UI auth token and Web UI runtime database

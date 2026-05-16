@@ -22,6 +22,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from analyzers import DEFAULT_ANALYZERS
+from core.event_bus import EventBus
+from core.memory_router import MemoryRouter
+from core.privacy import FAMILY_SHARED, SUMMARY_ONLY
+from core.relationship_graph import RelationshipGraph
+from core.state_engine import StateEngine
+
 try:
     import yaml
 except Exception:
@@ -32,6 +39,10 @@ ROOT = Path("/opt/hermes-home")
 CONFIG_PATH = ROOT / "config.yaml"
 DB_PATH = ROOT / "home.db"
 CONFIG_LOCK = threading.Lock()
+
+
+def family_id(cfg: dict[str, Any]) -> str:
+    return str(cfg.get("family_id") or cfg.get("household_name") or "default")
 
 
 def load_config() -> dict[str, Any]:
@@ -127,9 +138,22 @@ def init_db() -> None:
             )
             """
         )
+        for column, ddl in [
+            ("family_id", "ALTER TABLE family_logs ADD COLUMN family_id TEXT DEFAULT 'default'"),
+            ("scope", "ALTER TABLE family_logs ADD COLUMN scope TEXT DEFAULT 'family_shared'"),
+            ("confidence", "ALTER TABLE family_logs ADD COLUMN confidence REAL DEFAULT 1"),
+        ]:
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
         conn.execute("CREATE INDEX IF NOT EXISTS idx_family_logs_occurred_at ON family_logs(occurred_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_family_logs_member_id ON family_logs(member_id)")
         conn.commit()
+    EventBus(DB_PATH).init_db()
+    StateEngine(DB_PATH).init_db()
+    RelationshipGraph(DB_PATH).init_db()
 
 
 def log_line(message: str) -> None:
@@ -197,23 +221,28 @@ def update_slave_member_name(gateway_id: str, member_name: str) -> None:
 
 def save_member_identity_log(gateway_id: str, member_name: str, event: dict[str, Any]) -> None:
     now = int(time.time())
+    cfg = load_config()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
             INSERT INTO family_logs (
-                created_at, occurred_at, gateway_id, member_id, source, title, content, tags, importance, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, occurred_at, family_id, gateway_id, member_id, source, scope,
+                title, content, tags, importance, confidence, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 now,
                 now,
+                family_id(cfg),
                 gateway_id,
                 member_name,
                 str((event.get("source") or {}).get("platform") or ""),
+                FAMILY_SHARED,
                 "家庭成员身份确认",
                 f"{gateway_id} 的家庭成员显示名设定为 {member_name}。",
                 "成员,身份,onboarding",
                 4,
+                1,
                 json.dumps({"event": event, "member_name": member_name}, ensure_ascii=False),
             ),
         )
@@ -362,23 +391,29 @@ def save_family_log(entry: dict[str, Any], event: dict[str, Any], slave: dict[st
     content = str(entry.get("content") or "").strip()
     if not title or not content:
         return
+    cfg = load_config()
+    scope = str(entry.get("scope") or SUMMARY_ONLY)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
             INSERT INTO family_logs (
-                created_at, occurred_at, gateway_id, member_id, source, title, content, tags, importance, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, occurred_at, family_id, gateway_id, member_id, source, scope,
+                title, content, tags, importance, confidence, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 now,
                 occurred_at,
+                family_id(cfg),
                 event.get("gateway_id", ""),
                 event.get("member_id", "") or slave.get("member_id", ""),
                 str(source.get("platform") or ""),
+                scope,
                 title,
                 content,
                 str(tags),
                 importance,
+                float(entry.get("confidence") or 0.75),
                 json.dumps({"event": event, "entry": entry}, ensure_ascii=False),
             ),
         )
@@ -417,6 +452,7 @@ AI回复：{reply}
   "title": "短标题",
   "content": "可长期检索的一段事实记录",
   "tags": ["健康","日程","成就","家庭决定","偏好","大事件"] 中选择或自定义,
+  "scope": "family_shared/summary_only/private/system_only/agent_safe",
   "importance": 1-5
 }}
 """
@@ -439,10 +475,16 @@ def build_prompt(cfg: dict[str, Any], slave: dict[str, Any], event: dict[str, An
     member_name = slave.get("member_name") or event.get("member_id") or event.get("gateway_id")
     household = cfg.get("household_name") or "家庭"
     text = event.get("text") or ""
-    family_context = format_family_logs(search_family_logs(text))
+    router = MemoryRouter(DB_PATH)
+    routed = router.route(text, family_id=family_id(cfg), member_id=str(event.get("member_id") or slave.get("member_id") or ""), limit=8)
+    family_context = router.format_for_prompt(routed)
+    if not family_context:
+        family_context = format_family_logs(search_family_logs(text))
     family_context_block = f"\n{family_context}\n" if family_context else ""
     return f"""你是 {household} 的主网关家庭 agent。
 如当前问题涉及长期家庭事实、家庭日志检索结果、多人共同背景、日程、健康、成就或大事件，请按 family-logs skill 的原则处理。
+你只能使用 Memory Router 提供的状态摘要和家庭日志，不要试图读取或复述私人原文。
+私人状态只能以“状态/趋势/风险”形式使用，不能转发原始内容。
 
 当前消息来自家庭成员：{member_name}
 来源渠道：{source.get("platform", "unknown")}
@@ -516,6 +558,28 @@ def process_event(event: dict[str, Any]) -> None:
     if not is_allowed(slave, event):
         log_line(f"drop unauthorized gateway_id={gateway_id} user={source.get('user_id')}")
         return
+    canonical_event = EventBus(DB_PATH).publish_raw(event, family_id=family_id(cfg), event_type="chat_message")
+    try:
+        states = StateEngine(DB_PATH).process_event(canonical_event, DEFAULT_ANALYZERS)
+        if states:
+            graph = RelationshipGraph(DB_PATH)
+            for state in states:
+                if str(state.get("type") or "").startswith("relationship/"):
+                    for related in state.get("related_members") or []:
+                        graph.update_edge(
+                            family_id(canonical_event),
+                            str(canonical_event.get("member_id") or "unknown"),
+                            str(related),
+                            {
+                                "tension": float(state.get("value") or 0) if "tension" in str(state.get("type")) else 0,
+                                "support": float(state.get("value") or 0) if "support" in str(state.get("type")) else 0,
+                                "confidence": float(state.get("confidence") or 0.5),
+                            },
+                            raw=state,
+                        )
+            log_line(f"states updated gateway_id={gateway_id} count={len(states)}")
+    except Exception as exc:
+        log_line(f"state engine error gateway_id={gateway_id}: {exc}")
     if not save_inbound(event):
         log_line(f"duplicate gateway_id={gateway_id} message_id={event.get('message_id')}")
         return

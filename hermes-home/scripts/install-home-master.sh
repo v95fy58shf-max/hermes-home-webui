@@ -7,6 +7,8 @@ SERVICE_FILE="/etc/systemd/system/hermes-home-master.service"
 
 install -d "$INSTALL_DIR"
 install -m 0755 "$SRC_DIR/master_gateway.py" "$INSTALL_DIR/master_gateway.py"
+cp -R "$SRC_DIR/core" "$INSTALL_DIR/core"
+cp -R "$SRC_DIR/analyzers" "$INSTALL_DIR/analyzers"
 
 if [ ! -f "$INSTALL_DIR/config.yaml" ]; then
   install -m 0644 "$SRC_DIR/config.example.yaml" "$INSTALL_DIR/config.yaml"

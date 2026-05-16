@@ -1,8 +1,13 @@
 # Hermes Home WebUI
 
-这是一个面向家庭场景魔改的 Hermes Web UI 版本，目标是把 Hermes 变成可多人使用的家庭 Agent。
+Hermes Home WebUI 是基于 Hermes Agent 和 Hermes Web UI 的家庭版改造。目标不是把 Hermes 改成另一个不可维护的本体，而是在 Hermes 外面增加一层可替换、可升级、可长期演进的家庭系统层。
 
-核心原则：不修改 Hermes Agent 本体。Hermes 仍然可以按上游方式更新；家庭能力通过 Web UI、主网关、从网关插件和家庭日志层实现。
+核心原则：
+
+- 不修改 Hermes Agent 内核。
+- Hermes 只作为 LLM Runtime Provider。
+- 多微信、多成员、家庭状态、家庭记忆都放在外挂层。
+- 发布源码时不包含模型 API、微信登录态、个人记忆、运行数据库和服务器密钥。
 
 ## 源码来源
 
@@ -11,104 +16,108 @@
 - Hermes Agent: https://github.com/NousResearch/hermes-agent
 - Hermes Web UI: https://github.com/EKKOLearnAI/hermes-web-ui
 
-本仓库保留 Hermes Web UI 原有管理面板能力，并在此基础上加入家庭网关、多微信绑定、家庭长期日志等功能。原项目版权、协议与贡献归原作者所有；本仓库新增的家庭版功能位于 `hermes-home/` 及相关 Web UI 改动中。
+原项目版权、协议和贡献归原作者所有。本仓库保留 Web UI 管理基础，并新增 `hermes-home/` 家庭层、Web UI 多网关管理和家庭状态系统。
 
-## 这个版本解决什么问题
+## 第一阶段成果
 
-原始 Hermes 适合单人或单网关使用。家庭场景里会遇到几个问题：
+- 多微信独立 profile，每个家庭成员一个从网关。
+- `home-master` 主网关统一接收从网关消息。
+- `home-slave-relay` 插件把从网关消息转发给主网关。
+- Web UI 支持新建网关，端口自动递增。
+- 新建网关会清空频道配置和微信凭据，避免复制登录态。
+- 频道页面支持按运行中的网关动态切换配置。
+- 首次微信绑定后会询问用户身份。
+- 用户说“我是妈妈”“我叫张三”“叫我小王”时，可同步更新网关显示名。
+- 新增家庭日志，和个人聊天上下文分离。
+- 家庭日志支持搜索、重要性过滤、新增、编辑和删除。
+- 新增家庭日志 skill，让 Hermes 知道必要时可检索家庭长期信息。
 
-- 多个家庭成员都需要绑定微信。
-- 每个微信登录态必须独立，不能互相覆盖。
-- 不能直接改 Hermes 本体，否则后续不好升级。
-- 家庭公共信息需要长期保存，但不能污染每个人自己的聊天上下文。
-- Web UI 原本不支持多网关动态创建、切换和按网关配置频道。
+## 第二阶段目标
 
-这个版本把 Hermes 拆成主从结构：
+第二阶段开始从“多人聊天系统”升级为“家庭状态系统”。
 
-- 主网关 `home-master`：家庭 Agent 的“大脑”，负责汇总、回复、检索家庭日志。
-- 从网关 `wechat2`、`wechat3` 等：每个家庭成员一个独立 Hermes profile，用于独立绑定微信。
-- Relay 插件：从网关收到消息后转发给主网关，由主网关统一处理。
-- Web UI：负责新建网关、端口分配、按网关配置频道、改成员显示名、管理家庭日志。
+新增基础设施：
 
-## 主要特色
+- Event Bus：所有输入先统一成事件。
+- State Engine：把事件转成长期结构化状态。
+- Privacy Scope：所有 event、memory、state 都带隐私范围。
+- Decay Worker：状态和记忆支持 TTL、importance、confidence、decay。
+- Memory Router：根据问题决定检索哪些状态或日志，再脱敏注入 Hermes。
+- Relationship Graph：把家庭关系作为一等对象，而不是只看账号。
+- Expert Analyzers：情绪、睡眠、家庭关系、老人健康等低 token 分析器。
 
-### 多微信家庭网关
+核心链路：
 
-- 支持在 Web UI 的“网关”页点击“新建网关”。
-- 每新建一个从网关，自动分配下一个端口。
-- 新网关会 clone `home-master` profile，但会清空频道配置和微信凭据。
-- 每个从网关可以独立扫码绑定一个微信账号。
-- 从网关之间微信 token、account id、扫码状态互不影响。
+```text
+微信/设备/NAS
+      ↓
+Gateway Layer
+      ↓
+Event Bus
+      ↓
+State Engine
+      ↓
+Privacy Filter
+      ↓
+Memory Router
+      ↓
+Relationship Graph
+      ↓
+Expert Analyzers
+      ↓
+Hermes / LLM
+      ↓
+家庭建议与交互
+```
 
-### 主从架构，不改 Hermes 本体
+## 隐私原则
 
-- Hermes Agent 本体保持原样。
-- 家庭逻辑放在 `/opt/hermes-home/master_gateway.py`。
-- 从网关通过 `home-slave-relay` 插件把消息转给主网关。
-- 后续升级 Hermes 时，不需要把家庭逻辑打进 Hermes 源码。
+家庭系统不直接转发私人原文，而是做状态转发。
 
-### 首次绑定身份初始化
+例子：
 
-新微信绑定成功后，第一次发消息会触发身份询问。
+- 孩子原话：“我讨厌妈妈”
+- 原始事件 scope：`private`
+- 可共享摘要 scope：`summary_only`
+- 注入给家庭层的内容：“孩子近期家庭关系压力偏高”
 
-用户可以回复：
+目前定义的隐私范围：
 
-- `我是妈妈`
-- `我叫张三`
-- `叫我小王`
+- `private`
+- `family_shared`
+- `summary_only`
+- `parent_visible`
+- `system_only`
+- `agent_safe`
 
-系统会自动把该微信从网关的显示名同步到 Web UI。也可以在“网关”页手动点击“改名”。
-
-### 多网关频道配置
-
-原 Web UI 的频道页面只面向单网关。这个版本增加了动态网关选项卡：
-
-- 页面上方显示当前已运行网关。
-- 点击不同网关后，频道配置读写对应 profile。
-- 微信、企业微信、QQ、飞书等频道配置都按网关隔离。
-- 新建网关的频道设置默认为空，避免复制主网关或其他成员的登录态。
-
-### 家庭日志
-
-家庭日志是独立的长期家庭记忆，不直接混入个人上下文。
-
-适合保存：
-
-- 多人共同提及或确认的信息
-- 家庭决定
-- 预约、日程、旅行、学校、工作事件
-- 健康和照护信息
-- 成就、里程碑、大事件
-- 长期偏好、禁忌和家庭约束
-
-Web UI 支持：
-
-- 搜索家庭日志
-- 按重要度筛选
-- 新增
-- 编辑
-- 删除
-
-Hermes 在需要时会像使用联网搜索结果一样检索家庭日志，而不是把它一直塞进每个人的聊天上下文。
-
-## 目录说明
+## 目录
 
 ```text
 hermes-home/
-  master_gateway.py                 # 家庭主网关
-  config.example.yaml               # 脱敏示例配置
-  plugins/home_slave_relay/          # 从网关转发插件
-  skills/family-logs/SKILL.md        # 告诉 Hermes 如何使用家庭日志
-  systemd/hermes-home-master.service # systemd 服务模板
-  scripts/install-home-master.sh     # 主网关安装脚本
+  master_gateway.py
+  config.example.yaml
+  core/
+    event_bus.py
+    state_engine.py
+    privacy.py
+    decay_worker.py
+    memory_router.py
+    relationship_graph.py
+  analyzers/
+    emotion_analyzer.py
+    sleep_analyzer.py
+    family_relation_analyzer.py
+    elderly_health_analyzer.py
+  plugins/home_slave_relay/
+  skills/family-logs/SKILL.md
+  systemd/hermes-home-master.service
+  scripts/install-home-master.sh
 
-docs/HERMES_HOME_ZH.md               # 家庭版详细说明
-docs/RELEASE_SANITIZE.md             # 发布前脱敏检查清单
+docs/HERMES_HOME_ZH.md
+docs/RELEASE_SANITIZE.md
 ```
 
 ## 安装概览
-
-先安装并配置 Hermes Agent 与本 Web UI，然后安装家庭主网关：
 
 ```bash
 cd hermes-home
@@ -117,33 +126,17 @@ sudo nano /opt/hermes-home/config.yaml
 sudo systemctl start hermes-home-master.service
 ```
 
-启动 Web UI 后，在“网关”页面点击“新建网关”，再到“频道”页面选择对应网关进行微信扫码绑定。
+然后启动 Web UI，在“网关”页面新建从网关，在“频道”页面选择对应网关扫码绑定微信。
 
-## 发布包不包含什么
+## 发布清理
 
-本仓库发布前已清理运行态数据。不要把下面内容提交到仓库：
+仓库不应包含：
 
-- 模型 API key
-- provider 登录态
-- 微信 token、account ID、扫码状态、cookie、OpenID
-- Hermes 会话历史
-- 个人记忆、用户画像、persona 私有内容
+- 模型 API key 或 provider 凭据
+- 微信 token、account ID、OpenID、cookie、扫码状态
+- Hermes 会话、历史、个人记忆、用户画像、persona 私有内容
 - `/opt/hermes-home/home.db`
-- Web UI token、数据库和日志
+- Web UI token、运行数据库、日志
 - 服务器 IP、密码、SSH key
 
-## 当前状态
-
-这是家庭版初版，已验证：
-
-- 多网关创建
-- 端口自动递增
-- 多微信扫码绑定
-- 按网关配置频道
-- 首次绑定身份询问和显示名同步
-- 家庭日志保存、检索、编辑、删除
-- Hermes 本体保持可更新
-
-## License
-
-本仓库继承上游 Hermes Web UI 的许可约束。原始项目及依赖项目的版权归各自作者所有。
+详见 `docs/RELEASE_SANITIZE.md`。
