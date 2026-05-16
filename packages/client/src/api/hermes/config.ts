@@ -64,28 +64,36 @@ export interface AppConfig {
   [key: string]: any
 }
 
-export async function fetchConfig(sections?: string[]): Promise<AppConfig> {
+function withProfile(path: string, profile?: string): string {
+  if (!profile) return path
+  const separator = path.includes('?') ? '&' : '?'
+  return `${path}${separator}profile=${encodeURIComponent(profile)}`
+}
+
+export async function fetchConfig(sections?: string[], profile?: string): Promise<AppConfig> {
   const query = sections ? `?sections=${sections.join(',')}` : ''
-  return request<AppConfig>(`/api/hermes/config${query}`)
+  return request<AppConfig>(withProfile(`/api/hermes/config${query}`, profile))
 }
 
 export async function updateConfigSection(
   section: string,
   values: Record<string, any>,
+  profile?: string,
 ): Promise<void> {
   await request('/api/hermes/config', {
     method: 'PUT',
-    body: JSON.stringify({ section, values }),
+    body: JSON.stringify({ section, values, profile }),
   })
 }
 
 export async function saveCredentials(
   platform: string,
   values: Record<string, any>,
+  profile?: string,
 ): Promise<void> {
   await request('/api/hermes/config/credentials', {
     method: 'PUT',
-    body: JSON.stringify({ platform, values }),
+    body: JSON.stringify({ platform, values, profile }),
   })
 }
 
@@ -101,18 +109,19 @@ export interface WeixinQrStatus {
   base_url?: string
 }
 
-export async function fetchWeixinQrCode(): Promise<WeixinQrCode> {
-  return request<WeixinQrCode>('/api/hermes/weixin/qrcode')
+export async function fetchWeixinQrCode(profile?: string): Promise<WeixinQrCode> {
+  return request<WeixinQrCode>(withProfile('/api/hermes/weixin/qrcode', profile))
 }
 
-export async function pollWeixinQrStatus(qrcode: string): Promise<WeixinQrStatus> {
-  return request<WeixinQrStatus>(`/api/hermes/weixin/qrcode/status?qrcode=${encodeURIComponent(qrcode)}`)
+export async function pollWeixinQrStatus(qrcode: string, profile?: string): Promise<WeixinQrStatus> {
+  return request<WeixinQrStatus>(withProfile(`/api/hermes/weixin/qrcode/status?qrcode=${encodeURIComponent(qrcode)}`, profile))
 }
 
 export async function saveWeixinCredentials(data: {
   account_id: string
   token: string
   base_url?: string
+  profile?: string
 }): Promise<void> {
   await request('/api/hermes/weixin/save', {
     method: 'POST',

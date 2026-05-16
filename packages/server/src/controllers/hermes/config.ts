@@ -1,7 +1,8 @@
-import { readFile } from 'fs/promises'
+import { chmod, readFile } from 'fs/promises'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { getGatewayManagerInstance } from '../../services/gateway-bootstrap'
-import { getActiveConfigPath, getActiveEnvPath } from '../../services/hermes/hermes-profile'
-import { saveEnvValue } from '../../services/config-helpers'
+import { getActiveConfigPath, getActiveEnvPath, getActiveProfileName, getHermesBaseDir } from '../../services/hermes/hermes-profile'
 import { logger } from '../../services/logger'
 import { safeFileStore } from '../../services/safe-file-store'
 
@@ -11,8 +12,26 @@ const PLATFORM_SECTIONS = new Set([
   'approvals',
 ])
 
-const configPath = () => getActiveConfigPath()
-const envPath = () => getActiveEnvPath()
+function normalizeProfileName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function getRequestProfile(ctx: any): string {
+  const fromQuery = typeof ctx.query?.profile === 'string' ? ctx.query.profile : ''
+  const fromBody = typeof ctx.request?.body?.profile === 'string' ? ctx.request.body.profile : ''
+  return normalizeProfileName(fromBody || fromQuery || getActiveProfileName())
+}
+
+function resolveProfileDir(profile: string): string {
+  const base = getHermesBaseDir()
+  if (!profile || profile === 'default') return base
+  const dir = join(base, 'profiles', profile)
+  if (!existsSync(dir)) throw new Error(`Profile "${profile}" not found`)
+  return dir
+}
+
+const configPath = (ctx?: any) => ctx ? join(resolveProfileDir(getRequestProfile(ctx)), 'config.yaml') : getActiveConfigPath()
+const envPath = (ctx?: any) => ctx ? join(resolveProfileDir(getRequestProfile(ctx)), '.env') : getActiveEnvPath()
 
 const envPlatformMap: Record<string, [string, string]> = {
   TELEGRAM_BOT_TOKEN: ['telegram', 'token'],
@@ -78,9 +97,42 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
   return target
 }
 
-async function readEnvPlatforms(): Promise<Record<string, any>> {
+async function saveEnvValueToFile(filePath: string, key: string, value: string): Promise<void> {
+  await safeFileStore.updateText(filePath, (raw) => {
+    const remove = !value
+    const lines = raw.split('\n')
+    let found = false
+    const result: string[] = []
+    for (const line of lines) {
+      const trimmed = line.trim()
+      const eqIdx = trimmed.indexOf('=')
+      if (eqIdx !== -1 && trimmed.slice(0, eqIdx).trim() === key) {
+        if (!remove) result.push(`${key}=${value}`)
+        found = true
+      } else {
+        result.push(line)
+      }
+    }
+    if (!found && !remove) result.push(`${key}=${value}`)
+    return result.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n'
+  })
+  try { await chmod(filePath, 0o600) } catch { }
+}
+
+async function restartProfileGateway(profile: string): Promise<void> {
+  const mgr = getGatewayManagerInstance()
+  if (!mgr) return
   try {
-    const raw = await readFile(envPath(), 'utf-8')
+    await mgr.stop(profile)
+    await mgr.start(profile)
+  } catch (err) {
+    logger.error(err, 'GatewayManager restart failed for profile "%s"', profile)
+  }
+}
+
+async function readEnvPlatforms(targetEnvPath: string): Promise<Record<string, any>> {
+  try {
+    const raw = await readFile(targetEnvPath, 'utf-8')
     const env = parseEnv(raw)
     const platforms: Record<string, any> = {}
     for (const [envKey, [platform, cfgPath]] of Object.entries(envPlatformMap)) {
@@ -101,8 +153,8 @@ async function readConfig(): Promise<Record<string, any>> {
 
 export async function getConfig(ctx: any) {
   try {
-    const config = await readConfig()
-    const envPlatforms = await readEnvPlatforms()
+    const config = await safeFileStore.readYaml(configPath(ctx))
+    const envPlatforms = await readEnvPlatforms(envPath(ctx))
     if (Object.keys(envPlatforms).length > 0) {
       const existing = config.platforms || {}
       for (const [platform, vals] of Object.entries(envPlatforms)) {
@@ -132,7 +184,8 @@ export async function updateConfig(ctx: any) {
     ctx.status = 400; ctx.body = { error: 'Missing section or values' }; return
   }
   try {
-    await safeFileStore.updateYaml(configPath(), (config) => {
+    const profile = getRequestProfile(ctx)
+    await safeFileStore.updateYaml(configPath(ctx), (config) => {
       config[section] = deepMerge(config[section] || {}, values)
       return config
     }, {
@@ -143,18 +196,7 @@ export async function updateConfig(ctx: any) {
     })
 
     // 使用 GatewayManager 重启平台网关
-    if (PLATFORM_SECTIONS.has(section)) {
-      const mgr = getGatewayManagerInstance()
-      if (mgr) {
-        try {
-          const activeProfile = mgr.getActiveProfile()
-          await mgr.stop(activeProfile)
-          await mgr.start(activeProfile)
-        } catch (err) {
-          logger.error(err, 'GatewayManager restart failed')
-        }
-      }
-    }
+    if (PLATFORM_SECTIONS.has(section)) await restartProfileGateway(profile)
 
     ctx.body = { success: true }
   } catch (err: any) {
@@ -168,6 +210,8 @@ export async function updateCredentials(ctx: any) {
     ctx.status = 400; ctx.body = { error: 'Missing platform or values' }; return
   }
   try {
+    const profile = getRequestProfile(ctx)
+    const targetEnvPath = envPath(ctx)
     const envMap = platformEnvMap[platform]
     if (!envMap) {
       ctx.status = 400; ctx.body = { error: `Unknown platform: ${platform}` }; return
@@ -178,12 +222,12 @@ export async function updateCredentials(ctx: any) {
         for (const [subKey, subVal] of Object.entries(val as Record<string, any>)) { flatValues[`extra.${subKey}`] = subVal }
       } else { flatValues[key] = val }
     }
-    await safeFileStore.updateYaml(configPath(), async (config) => {
+    await safeFileStore.updateYaml(configPath(ctx), async (config) => {
       for (const [cfgPath, val] of Object.entries(flatValues)) {
         const envVar = envMap[cfgPath]
         if (!envVar) continue
         if (val === undefined || val === null || val === '') {
-          await saveEnvValue(envVar, '')
+          await saveEnvValueToFile(targetEnvPath, envVar, '')
           const parts = cfgPath.split('.')
           let obj: any = config.platforms?.[platform]
           if (obj) {
@@ -197,7 +241,7 @@ export async function updateCredentials(ctx: any) {
             if (Object.keys(obj).length === 0) { if (!config.platforms) config.platforms = {}; delete config.platforms[platform] }
           }
         } else {
-          await saveEnvValue(envVar, String(val))
+          await saveEnvValueToFile(targetEnvPath, envVar, String(val))
         }
       }
       return config
@@ -209,16 +253,7 @@ export async function updateCredentials(ctx: any) {
     })
 
     // 使用 GatewayManager 重启平台网关
-    const mgr = getGatewayManagerInstance()
-    if (mgr) {
-      try {
-        const activeProfile = mgr.getActiveProfile()
-        await mgr.stop(activeProfile)
-        await mgr.start(activeProfile)
-      } catch (err) {
-        logger.error(err, 'GatewayManager restart failed')
-      }
-    }
+    await restartProfileGateway(profile)
 
     ctx.body = { success: true }
   } catch (err: any) {

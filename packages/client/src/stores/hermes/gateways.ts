@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { fetchGateways, startGateway, stopGateway, type GatewayStatus } from '@/api/hermes/gateways'
+import { createGateway, fetchGateways, startGateway, stopGateway, updateGatewayMemberName, type GatewayStatus } from '@/api/hermes/gateways'
 
 export const useGatewayStore = defineStore('gateways', () => {
   const gateways = ref<GatewayStatus[]>([])
@@ -32,6 +32,22 @@ export const useGatewayStore = defineStore('gateways', () => {
     }
   }
 
+  async function create(name?: string) {
+    loading.value = true
+    try {
+      const result = await createGateway(name)
+      const idx = gateways.value.findIndex(g => g.profile === result.gateway.profile)
+      if (idx >= 0) {
+        gateways.value[idx] = result.gateway
+      } else {
+        gateways.value.push(result.gateway)
+      }
+      return result
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function stop(name: string) {
     loading.value = true
     try {
@@ -47,5 +63,21 @@ export const useGatewayStore = defineStore('gateways', () => {
     }
   }
 
-  return { gateways, loading, fetchStatus, start, stop }
+  async function updateMemberName(name: string, memberName: string) {
+    loading.value = true
+    try {
+      const status = await updateGatewayMemberName(name, memberName)
+      const idx = gateways.value.findIndex(g => g.profile === name)
+      if (idx >= 0) {
+        gateways.value[idx] = status
+      } else {
+        gateways.value.push(status)
+      }
+      return status
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { gateways, loading, fetchStatus, create, start, stop, updateMemberName }
 })

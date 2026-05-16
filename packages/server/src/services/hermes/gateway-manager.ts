@@ -443,6 +443,30 @@ export class GatewayManager {
     return { port, host }
   }
 
+  async allocateNextPort(host = process.env.GATEWAY_HOST || '127.0.0.1'): Promise<number> {
+    const usedPorts = new Set<number>(this.allocatedPorts)
+    const webUiPort = getWebUiPort()
+    if (webUiPort !== null) usedPorts.add(webUiPort)
+
+    const profiles = await this.listProfiles()
+    for (const profile of profiles) {
+      const configured = this.readProfilePort(profile)
+      if (configured.host === host) usedPorts.add(configured.port)
+    }
+
+    for (const gw of Array.from(this.gateways.values())) {
+      if (gw.host === host && this.isProcessAlive(gw.pid)) usedPorts.add(gw.port)
+    }
+
+    const usedGatewayPorts = Array.from(usedPorts).filter(port => port !== webUiPort && port >= 8642 && port < 65535)
+    const base = Math.max(8642, ...usedGatewayPorts) + 1
+    return this.findFreePort(base, host, usedPorts)
+  }
+
+  async configureProfilePort(name: string, port: number, host = process.env.GATEWAY_HOST || '127.0.0.1'): Promise<void> {
+    await this.writeProfilePort(name, port, host)
+  }
+
   // ============================
   // 公开方法：状态查询
   // ============================

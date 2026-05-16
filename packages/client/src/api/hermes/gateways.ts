@@ -6,6 +6,9 @@ export interface GatewayStatus {
   host: string
   url: string
   running: boolean
+  home_slave?: boolean
+  member_name?: string
+  display_name?: string
   pid?: number
   diagnostics?: {
     pid_path: string
@@ -22,6 +25,22 @@ export interface GatewayStatus {
 export async function fetchGateways(): Promise<GatewayStatus[]> {
   const res = await request<{ gateways: GatewayStatus[] }>('/api/hermes/gateways')
   return res.gateways
+}
+
+export async function createGateway(name?: string): Promise<{ gateway: GatewayStatus; name: string; port: number }> {
+  const res = await request<{ success: boolean; gateway: GatewayStatus; name: string; port: number }>('/api/hermes/gateways', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+  return { gateway: res.gateway, name: res.name, port: res.port }
+}
+
+export async function updateGatewayMemberName(name: string, memberName: string): Promise<GatewayStatus> {
+  const res = await request<{ success: boolean; gateway: GatewayStatus }>(`/api/hermes/gateways/${name}/member-name`, {
+    method: 'PATCH',
+    body: JSON.stringify({ member_name: memberName }),
+  })
+  return res.gateway
 }
 
 export async function startGateway(name: string): Promise<GatewayStatus> {

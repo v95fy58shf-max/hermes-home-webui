@@ -9,6 +9,26 @@ lerna-debug.log*
 package-lock.json
 node_modules
 dist
+
+# Runtime state and secrets
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+*.log
+hermes_data/
+.hermes/
+.hermes-web-ui/
+profiles/
+sessions/
+memories/
+credentials/
+weixin/
+wechat/
+home.db
 playwright-report
 test-results
 dist-ssr

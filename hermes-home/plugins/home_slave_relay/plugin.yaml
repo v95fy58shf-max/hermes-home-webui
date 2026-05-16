@@ -1,0 +1,5 @@
+name: home-slave-relay
+version: 0.1.0
+description: "Relay slave gateway messages to the local Hermes Home master gateway."
+hooks:
+  - pre_gateway_dispatch

@@ -9,6 +9,8 @@
   schedule cron jobs, browse skills — all from a clean, responsive web interface.
 </p>
 
+> Hermes Home extension docs are available in [hermes-home/README.md](hermes-home/README.md). The Chinese guide is [docs/HERMES_HOME_ZH.md](docs/HERMES_HOME_ZH.md).
+
 <p align="center">
   <code>npm install -g hermes-web-ui && hermes-web-ui start</code>
 </p>

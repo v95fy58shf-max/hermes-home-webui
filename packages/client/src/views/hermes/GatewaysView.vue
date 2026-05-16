@@ -1,16 +1,64 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { NSpin, NButton, NTag, useMessage } from 'naive-ui'
+import { computed, onMounted, ref } from 'vue'
+import { NSpin, NButton, NTag, NModal, NForm, NFormItem, NInput, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useGatewayStore } from '@/stores/hermes/gateways'
 
 const { t } = useI18n()
 const message = useMessage()
 const gatewayStore = useGatewayStore()
+const createModalVisible = ref(false)
+const newGatewayName = ref('')
+const memberNameModalVisible = ref(false)
+const editingGatewayName = ref('')
+const editingMemberName = ref('')
+
+const suggestedGatewayName = computed(() => {
+  let max = 2
+  for (const gateway of gatewayStore.gateways) {
+    const match = gateway.profile.match(/^wechat(\d+)$/)
+    if (match) max = Math.max(max, Number(match[1]))
+  }
+  return `wechat${max + 1}`
+})
 
 onMounted(() => {
   gatewayStore.fetchStatus()
 })
+
+function openCreateModal() {
+  newGatewayName.value = suggestedGatewayName.value
+  createModalVisible.value = true
+}
+
+function openMemberNameModal(profile: string, memberName?: string) {
+  editingGatewayName.value = profile
+  editingMemberName.value = memberName || ''
+  memberNameModalVisible.value = true
+}
+
+async function handleCreateGateway() {
+  const name = newGatewayName.value.trim()
+  try {
+    const result = await gatewayStore.create(name || undefined)
+    message.success(`已创建网关 ${result.name}，端口 ${result.port}`)
+    createModalVisible.value = false
+    await gatewayStore.fetchStatus()
+  } catch (err: any) {
+    message.error(err.message)
+  }
+}
+
+async function handleUpdateMemberName() {
+  if (!editingGatewayName.value) return
+  try {
+    await gatewayStore.updateMemberName(editingGatewayName.value, editingMemberName.value.trim())
+    message.success('已更新网关显示名')
+    memberNameModalVisible.value = false
+  } catch (err: any) {
+    message.error(err.message)
+  }
+}
 
 async function handleToggle(name: string, running: boolean) {
   try {
@@ -31,6 +79,9 @@ async function handleToggle(name: string, running: boolean) {
   <div class="gateways-view">
     <header class="page-header">
       <h2 class="header-title">{{ t('gateways.title') }}</h2>
+      <NButton type="primary" :loading="gatewayStore.loading" @click="openCreateModal">
+        新建网关
+      </NButton>
     </header>
 
     <div class="gateways-content">
@@ -42,8 +93,9 @@ async function handleToggle(name: string, running: boolean) {
         <div v-else class="gateway-list">
           <div v-for="gw in gatewayStore.gateways" :key="gw.profile" class="gateway-card">
             <div class="gateway-info">
-              <div class="gateway-name">{{ gw.profile }}</div>
+              <div class="gateway-name">{{ gw.display_name || gw.profile }}</div>
               <div class="gateway-meta">
+                <span v-if="gw.display_name && gw.display_name !== gw.profile" class="meta-item">{{ gw.profile }}</span>
                 <span class="meta-item">{{ gw.host }}:{{ gw.port }}</span>
                 <span v-if="gw.pid" class="meta-item">PID: {{ gw.pid }}</span>
               </div>
@@ -54,6 +106,15 @@ async function handleToggle(name: string, running: boolean) {
               </div>
             </div>
             <div class="gateway-actions">
+              <NButton
+                v-if="gw.home_slave"
+                size="small"
+                tertiary
+                round
+                @click="openMemberNameModal(gw.profile, gw.member_name)"
+              >
+                改名
+              </NButton>
               <NTag :type="gw.running ? 'success' : 'default'" size="small" round>
                 {{ gw.running ? t('gateways.running') : t('gateways.stopped') }}
               </NTag>
@@ -70,6 +131,41 @@ async function handleToggle(name: string, running: boolean) {
         </div>
       </NSpin>
     </div>
+
+    <NModal
+      v-model:show="createModalVisible"
+      preset="dialog"
+      title="新建网关"
+      positive-text="创建并启动"
+      negative-text="取消"
+      :positive-button-props="{ loading: gatewayStore.loading }"
+      @positive-click="handleCreateGateway"
+    >
+      <NForm label-placement="top">
+        <NFormItem label="网关名称">
+          <NInput v-model:value="newGatewayName" placeholder="wechat3" />
+        </NFormItem>
+      </NForm>
+    </NModal>
+
+    <NModal
+      v-model:show="memberNameModalVisible"
+      preset="dialog"
+      title="修改网关显示名"
+      positive-text="保存"
+      negative-text="取消"
+      :positive-button-props="{ loading: gatewayStore.loading }"
+      @positive-click="handleUpdateMemberName"
+    >
+      <NForm label-placement="top">
+        <NFormItem label="网关">
+          <NInput :value="editingGatewayName" disabled />
+        </NFormItem>
+        <NFormItem label="显示名">
+          <NInput v-model:value="editingMemberName" placeholder="例如：妈妈、爸爸、小王" />
+        </NFormItem>
+      </NForm>
+    </NModal>
   </div>
 </template>
 
@@ -80,6 +176,13 @@ async function handleToggle(name: string, running: boolean) {
   height: calc(100 * var(--vh));
   display: flex;
   flex-direction: column;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .gateways-content {

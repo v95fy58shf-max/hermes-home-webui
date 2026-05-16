@@ -1,0 +1,17 @@
+household_name: "Hermes Home"
+listen_host: "127.0.0.1"
+listen_port: 18080
+workers: 1
+hermes_bin: "/usr/local/lib/hermes-agent/venv/bin/hermes"
+master_profile: "home-master"
+hermes_timeout_seconds: 240
+
+# Slave gateways are normally created by Hermes Web UI.
+# Keep real OpenIDs, WeChat tokens, model API keys, and member memories out of git.
+slaves:
+  wechat2:
+    member_id: "wechat2"
+    member_name: ""
+    hermes_home: "/root/.hermes/profiles/wechat2"
+    allowed_user_ids:
+      - "*"

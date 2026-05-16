@@ -6,6 +6,7 @@ import type { DisplayConfig, AgentConfig, MemoryConfig, SessionResetConfig, Priv
 export const useSettingsStore = defineStore('settings', () => {
   const loading = ref(false)
   const saving = ref(false)
+  const profile = ref('default')
 
   const display = ref<DisplayConfig>({})
   const agent = ref<AgentConfig>({})
@@ -25,10 +26,11 @@ export const useSettingsStore = defineStore('settings', () => {
   const weixin = ref<Record<string, any>>({})
   const platforms = ref<Record<string, any>>({})
 
-  async function fetchSettings() {
+  async function fetchSettings(targetProfile = profile.value) {
     loading.value = true
     try {
-      const data = await configApi.fetchConfig()
+      profile.value = targetProfile || 'default'
+      const data = await configApi.fetchConfig(undefined, profile.value)
       display.value = data.display || {}
       agent.value = data.agent || {}
       memory.value = data.memory || {}
@@ -83,10 +85,10 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function saveSection(section: string, values: Record<string, any>) {
+  async function saveSection(section: string, values: Record<string, any>, targetProfile = profile.value) {
     saving.value = true
     try {
-      await configApi.updateConfigSection(section, values)
+      await configApi.updateConfigSection(section, values, targetProfile)
     switch (section) {
       case 'display': display.value = { ...display.value, ...values }; break
       case 'agent': agent.value = { ...agent.value, ...values }; break
@@ -121,7 +123,7 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   return {
-    loading, saving,
+    loading, saving, profile,
     display, agent, memory, sessionReset, privacy, approvals,
     telegram, discord, slack, whatsapp, matrix, wecom, feishu, dingtalk, qqbot, weixin, platforms,
     fetchSettings, saveSection, updateLocal,

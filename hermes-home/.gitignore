@@ -1,0 +1,16 @@
+home.db
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+*.log
+config.yaml
+.env
+profiles/
+sessions/
+memories/
+credentials/
+weixin/
+wechat/
+runtime/
+state/

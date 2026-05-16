@@ -1,0 +1,15 @@
+[Unit]
+Description=Hermes Home Master Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hermes-home
+ExecStart=/usr/bin/python3 /opt/hermes-home/master_gateway.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

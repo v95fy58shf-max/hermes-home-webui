@@ -40,6 +40,19 @@ export interface MemoryData {
   soul_mtime: number | null
 }
 
+export interface FamilyLogEntry {
+  id: number
+  created_at: number
+  occurred_at: number
+  gateway_id: string
+  member_id: string
+  source: string
+  title: string
+  content: string
+  tags: string
+  importance: number
+}
+
 export interface SkillsData {
   categories: SkillCategory[]
   archived: SkillInfo[]
@@ -110,6 +123,50 @@ export async function saveMemory(section: 'memory' | 'user' | 'soul', content: s
     method: 'POST',
     body: JSON.stringify({ section, content }),
   })
+}
+
+export async function fetchFamilyLogs(q = '', limit = 80, minImportance = 1): Promise<FamilyLogEntry[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (q.trim()) params.set('q', q.trim())
+  if (minImportance > 1) params.set('min_importance', String(minImportance))
+  const res = await request<{ logs: FamilyLogEntry[] }>(`/api/hermes/family-logs?${params}`)
+  return res.logs
+}
+
+export async function addFamilyLog(data: {
+  occurred_at?: number
+  gateway_id?: string
+  member_id?: string
+  source?: string
+  title: string
+  content: string
+  tags?: string
+  importance?: number
+}): Promise<void> {
+  await request('/api/hermes/family-logs', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateFamilyLog(id: number, data: {
+  occurred_at?: number
+  gateway_id?: string
+  member_id?: string
+  source?: string
+  title: string
+  content: string
+  tags?: string
+  importance?: number
+}): Promise<void> {
+  await request(`/api/hermes/family-logs/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteFamilyLog(id: number): Promise<void> {
+  await request(`/api/hermes/family-logs/${id}`, { method: 'DELETE' })
 }
 
 export async function toggleSkill(name: string, enabled: boolean): Promise<void> {

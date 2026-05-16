@@ -1,11 +1,41 @@
 import axios from 'axios'
 import { chmod } from 'fs/promises'
-import { getActiveEnvPath } from '../../services/hermes/hermes-profile'
-import { restartGateway } from '../../services/hermes/hermes-cli'
+import { existsSync } from 'fs'
+import { join } from 'path'
+import { getGatewayManagerInstance } from '../../services/gateway-bootstrap'
+import { getActiveProfileName, getHermesBaseDir } from '../../services/hermes/hermes-profile'
 import { safeFileStore } from '../../services/safe-file-store'
 
 const ILINK_BASE = 'https://ilinkai.weixin.qq.com'
-const envPath = () => getActiveEnvPath()
+
+function normalizeProfileName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function getRequestProfile(ctx: any): string {
+  const fromQuery = typeof ctx.query?.profile === 'string' ? ctx.query.profile : ''
+  const fromBody = typeof ctx.request?.body?.profile === 'string' ? ctx.request.body.profile : ''
+  return normalizeProfileName(fromBody || fromQuery || getActiveProfileName())
+}
+
+function resolveProfileDir(profile: string): string {
+  const base = getHermesBaseDir()
+  if (!profile || profile === 'default') return base
+  const dir = join(base, 'profiles', profile)
+  if (!existsSync(dir)) throw new Error(`Profile "${profile}" not found`)
+  return dir
+}
+
+function envPath(ctx: any): string {
+  return join(resolveProfileDir(getRequestProfile(ctx)), '.env')
+}
+
+async function restartProfileGateway(profile: string): Promise<void> {
+  const mgr = getGatewayManagerInstance()
+  if (!mgr) return
+  await mgr.stop(profile)
+  await mgr.start(profile)
+}
 
 export async function getQrcode(ctx: any) {
   try {
@@ -39,9 +69,10 @@ export async function save(ctx: any) {
   const { account_id, token, base_url } = ctx.request.body as { account_id: string; token: string; base_url?: string }
   if (!account_id || !token) { ctx.status = 400; ctx.body = { error: 'Missing account_id or token' }; return }
   try {
+    const profile = getRequestProfile(ctx)
     const entries: Record<string, string> = { WEIXIN_ACCOUNT_ID: account_id, WEIXIN_TOKEN: token }
     if (base_url) entries.WEIXIN_BASE_URL = base_url
-    const ep = envPath()
+    const ep = envPath(ctx)
     await safeFileStore.updateText(ep, (raw) => {
       const lines = raw.split('\n')
       const existingKeys = new Set<string>()
@@ -60,7 +91,7 @@ export async function save(ctx: any) {
       return result.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n'
     })
     try { await chmod(ep, 0o600) } catch { }
-    await restartGateway()
+    await restartProfileGateway(profile)
     ctx.body = { success: true }
   } catch (err: any) {
     ctx.status = 500; ctx.body = { error: err.message }

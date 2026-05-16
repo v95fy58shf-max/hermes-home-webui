@@ -10,6 +10,9 @@ import SettingRow from './SettingRow.vue'
 const settingsStore = useSettingsStore()
 const message = useMessage()
 const { t } = useI18n()
+const props = withDefaults(defineProps<{ profile?: string }>(), {
+  profile: 'default',
+})
 
 // Track saving state per platform.field
 const saving = reactive<Record<string, boolean>>({})
@@ -37,14 +40,14 @@ async function immediateSave(platform: string, field: string, saveFn: () => Prom
 }
 
 async function saveChannel(platform: string, field: string, values: Record<string, any>) {
-  immediateSave(platform, field, () => settingsStore.saveSection(platform, values))
+  immediateSave(platform, field, () => settingsStore.saveSection(platform, values, props.profile))
 }
 
 // Save credentials to .env (matching hermes gateway setup behavior)
 async function saveCredentials(platform: string, field: string, values: Record<string, any>) {
   immediateSave(platform, field, async () => {
-    await saveCredsApi(platform, values)
-    await settingsStore.fetchSettings()
+    await saveCredsApi(platform, values, props.profile)
+    await settingsStore.fetchSettings(props.profile)
   })
 }
 
@@ -69,7 +72,7 @@ async function startWeixinQrLogin() {
   stopWeixinPoll()
 
   try {
-    const data = await fetchWeixinQrCode()
+    const data = await fetchWeixinQrCode(props.profile)
     wxQrId.value = data.qrcode
     wxQrUrl.value = data.qrcode_url
     window.open(data.qrcode_url, '_blank')
@@ -85,7 +88,7 @@ function pollWeixinStatus() {
   if (!wxQrId.value) return
   wxPollTimer = setTimeout(async () => {
     try {
-      const data = await pollWeixinQrStatus(wxQrId.value)
+      const data = await pollWeixinQrStatus(wxQrId.value, props.profile)
       if (data.status === 'wait') {
         pollWeixinStatus()
       } else if (data.status === 'scaned') {
@@ -99,8 +102,9 @@ function pollWeixinStatus() {
           account_id: data.account_id!,
           token: data.token!,
           base_url: data.base_url,
+          profile: props.profile,
         })
-        await settingsStore.fetchSettings()
+        await settingsStore.fetchSettings(props.profile)
         message.success(t('settings.saved'))
       }
     } catch {

@@ -9,6 +9,8 @@
   管理定时任务、浏览技能 —— 全部在一个简洁响应式的 Web 界面中完成。
 </p>
 
+> 家庭版扩展文档见 [docs/HERMES_HOME_ZH.md](docs/HERMES_HOME_ZH.md)。主网关、从网关 relay 插件、家庭日志 skill 和安装脚本位于 [hermes-home/](hermes-home/)。
+
 <p align="center">
   <code>npm install -g hermes-web-ui && hermes-web-ui start</code>
 </p>
