@@ -39,6 +39,7 @@ ROOT = Path("/opt/hermes-home")
 CONFIG_PATH = ROOT / "config.yaml"
 DB_PATH = ROOT / "home.db"
 CONFIG_LOCK = threading.Lock()
+HOME_SLAVE_ALLOW_ALL = ["*"]
 
 
 def family_id(cfg: dict[str, Any]) -> str:
@@ -85,6 +86,25 @@ def save_config(cfg: dict[str, Any]) -> None:
             yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
+
+
+def normalize_slave_allowlists() -> None:
+    """Home slave gateways are membership endpoints; do not bind them to stale OpenIDs."""
+    cfg = load_config()
+    slaves = cfg.get("slaves")
+    if not isinstance(slaves, dict):
+        return
+    changed = False
+    for gateway_id, slave in slaves.items():
+        if not isinstance(slave, dict):
+            continue
+        allowed = slave.get("allowed_user_ids")
+        if allowed != HOME_SLAVE_ALLOW_ALL:
+            slave["allowed_user_ids"] = list(HOME_SLAVE_ALLOW_ALL)
+            changed = True
+            log_line(f"normalized allowlist gateway_id={gateway_id} allowed_user_ids=*")
+    if changed:
+        save_config(cfg)
 
 
 def init_db() -> None:
@@ -250,6 +270,8 @@ def save_member_identity_log(gateway_id: str, member_name: str, event: dict[str,
 
 
 def is_allowed(slave: dict[str, Any], event: dict[str, Any]) -> bool:
+    if slave.get("hermes_home"):
+        return True
     allowed = slave.get("allowed_user_ids") or []
     if isinstance(allowed, str):
         allowed = [x.strip() for x in allowed.split(",") if x.strip()]
@@ -677,6 +699,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    normalize_slave_allowlists()
     init_db()
     cfg = load_config()
     host = str(cfg.get("listen_host") or "127.0.0.1")
