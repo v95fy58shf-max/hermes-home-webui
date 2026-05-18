@@ -2,7 +2,7 @@
 import type { Attachment } from '@/stores/hermes/chat'
 import { useChatStore } from '@/stores/hermes/chat'
 import { useAppStore } from '@/stores/hermes/app'
-import { useProfilesStore } from '@/stores/hermes/profiles'
+import { MASTER_PROFILE } from '@/api/client'
 import { fetchContextLength } from '@/api/hermes/sessions'
 import { setModelContext } from '@/api/hermes/model-context'
 import { NButton, NTooltip, NSwitch, NModal, NInputNumber, useMessage } from 'naive-ui'
@@ -181,15 +181,13 @@ async function saveContextLimit() {
 
 async function loadContextLength() {
   try {
-    const profile = useProfilesStore().activeProfileName || undefined
-    contextLength.value = await fetchContextLength(profile)
+    contextLength.value = await fetchContextLength(MASTER_PROFILE)
   } catch {
     contextLength.value = FALLBACK_CONTEXT
   }
 }
 
 onMounted(loadContextLength)
-watch(() => useProfilesStore().activeProfileName, loadContextLength)
 watch(() => useAppStore().selectedModel, loadContextLength)
 
 const totalTokens = computed(() => {

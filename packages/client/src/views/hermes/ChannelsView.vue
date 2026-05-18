@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { NSpin, NTabs, NTabPane } from 'naive-ui'
+import { NSpin, NTabPane, NTabs } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
+import PlatformSettings from '@/components/hermes/settings/PlatformSettings.vue'
 import { useGatewayStore } from '@/stores/hermes/gateways'
 import { useSettingsStore } from '@/stores/hermes/settings'
-import PlatformSettings from '@/components/hermes/settings/PlatformSettings.vue'
 
 const settingsStore = useSettingsStore()
 const gatewayStore = useGatewayStore()
@@ -48,9 +48,7 @@ watch(selectedGateway, (profile) => {
         />
       </NTabs>
 
-      <div v-else class="empty-state">
-        请先在“网关”页面启动至少一个网关。
-      </div>
+      <div v-else class="empty-state">请先在“网关”页面启动至少一个网关。</div>
 
       <NSpin :show="gatewayStore.loading || settingsStore.loading || settingsStore.saving" size="large" :description="t('common.loading')">
         <PlatformSettings v-if="selectedGateway && !settingsStore.loading" :key="selectedGateway" :profile="selectedGateway" />

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NSpin, NButton, NTag, NModal, NForm, NFormItem, NInput, useMessage } from 'naive-ui'
+import { NButton, NForm, NFormItem, NInput, NModal, NSpin, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useGatewayStore } from '@/stores/hermes/gateways'
 
 const { t } = useI18n()
 const message = useMessage()
 const gatewayStore = useGatewayStore()
+
 const createModalVisible = ref(false)
 const newGatewayName = ref('')
 const memberNameModalVisible = ref(false)
@@ -53,7 +54,7 @@ async function handleUpdateMemberName() {
   if (!editingGatewayName.value) return
   try {
     await gatewayStore.updateMemberName(editingGatewayName.value, editingMemberName.value.trim())
-    message.success('已更新网关显示名')
+    message.success('已更新显示名')
     memberNameModalVisible.value = false
   } catch (err: any) {
     message.error(err.message)
@@ -79,21 +80,20 @@ async function handleToggle(name: string, running: boolean) {
   <div class="gateways-view">
     <header class="page-header">
       <h2 class="header-title">{{ t('gateways.title') }}</h2>
-      <NButton type="primary" :loading="gatewayStore.loading" @click="openCreateModal">
-        新建网关
-      </NButton>
+      <NButton type="primary" :loading="gatewayStore.loading" @click="openCreateModal">新建网关</NButton>
     </header>
 
     <div class="gateways-content">
       <NSpin :show="gatewayStore.loading" size="large">
-        <div v-if="gatewayStore.gateways.length === 0" class="empty-state">
-          {{ t('common.noData') }}
-        </div>
+        <div v-if="gatewayStore.gateways.length === 0" class="empty-state">{{ t('common.noData') }}</div>
 
         <div v-else class="gateway-list">
           <div v-for="gw in gatewayStore.gateways" :key="gw.profile" class="gateway-card">
             <div class="gateway-info">
-              <div class="gateway-name">{{ gw.display_name || gw.profile }}</div>
+              <div class="gateway-name">
+                {{ gw.display_name || gw.profile }}
+                <NTag v-if="gw.role === 'master'" size="small" type="info" round>master</NTag>
+              </div>
               <div class="gateway-meta">
                 <span v-if="gw.display_name && gw.display_name !== gw.profile" class="meta-item">{{ gw.profile }}</span>
                 <span class="meta-item">{{ gw.host }}:{{ gw.port }}</span>
@@ -101,29 +101,15 @@ async function handleToggle(name: string, running: boolean) {
               </div>
               <div v-if="gw.diagnostics" class="gateway-diagnostics">
                 <span class="diag-item">{{ gw.diagnostics.reason }}</span>
-                <span class="diag-item">PID: {{ gw.diagnostics.pid_path }}</span>
-                <span class="diag-item">Config: {{ gw.diagnostics.config_path }}</span>
+                <span class="diag-item">{{ gw.diagnostics.config_path }}</span>
               </div>
             </div>
             <div class="gateway-actions">
-              <NButton
-                v-if="gw.home_slave"
-                size="small"
-                tertiary
-                round
-                @click="openMemberNameModal(gw.profile, gw.member_name)"
-              >
-                改名
-              </NButton>
+              <NButton v-if="gw.home_slave" size="small" tertiary round @click="openMemberNameModal(gw.profile, gw.member_name)">改名</NButton>
               <NTag :type="gw.running ? 'success' : 'default'" size="small" round>
                 {{ gw.running ? t('gateways.running') : t('gateways.stopped') }}
               </NTag>
-              <NButton
-                size="small"
-                :type="gw.running ? 'warning' : 'primary'"
-                round
-                @click="handleToggle(gw.profile, gw.running)"
-              >
+              <NButton size="small" :type="gw.running ? 'warning' : 'primary'" round @click="handleToggle(gw.profile, gw.running)">
                 {{ gw.running ? t('common.stop') : t('common.start') }}
               </NButton>
             </div>
@@ -151,7 +137,7 @@ async function handleToggle(name: string, running: boolean) {
     <NModal
       v-model:show="memberNameModalVisible"
       preset="dialog"
-      title="修改网关显示名"
+      title="修改显示名"
       positive-text="保存"
       negative-text="取消"
       :positive-button-props="{ loading: gatewayStore.loading }"
@@ -225,22 +211,23 @@ async function handleToggle(name: string, running: boolean) {
 }
 
 .gateway-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: $text-primary;
   margin-bottom: 4px;
 }
 
-.gateway-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
+.gateway-meta,
 .gateway-diagnostics {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8px 12px;
+}
+
+.gateway-diagnostics {
   margin-top: 6px;
 }
 

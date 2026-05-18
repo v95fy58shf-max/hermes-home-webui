@@ -1,17 +1,12 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
-import { useProfilesStore } from './profiles'
+import { ref } from 'vue'
+import { MASTER_PROFILE } from '@/api/client'
 
 const PIN_KEY_PREFIX = 'hermes_session_pins_v1_'
 const HUMAN_ONLY_KEY_PREFIX = 'hermes_human_only_v1_'
 
 function currentProfileName(): string {
-  try {
-    return useProfilesStore().activeProfileName || 'default'
-  } catch {
-    // Fallback during store initialization
-    return localStorage.getItem('hermes_active_profile_name') || 'default'
-  }
+  return MASTER_PROFILE
 }
 
 function pinsKey(profileName: string): string {
@@ -97,11 +92,6 @@ export const useSessionBrowserPrefsStore = defineStore('session-browser-prefs', 
     persistPins()
     return true
   }
-
-  watch(
-    () => useProfilesStore().activeProfileName,
-    () => reload(),
-  )
 
   return {
     profileName,

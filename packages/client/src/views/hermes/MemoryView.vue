@@ -9,6 +9,7 @@ import { useGatewayStore } from '@/stores/hermes/gateways'
 const { t } = useI18n()
 const message = useMessage()
 const gatewayStore = useGatewayStore()
+
 const loading = ref(false)
 const data = ref<MemoryData | null>(null)
 const selectedGateway = ref('')
@@ -41,6 +42,14 @@ const importanceOptions = [
 ]
 
 const gatewayTabs = computed(() => gatewayStore.gateways)
+const familyLogModalTitle = computed(() => editingFamilyLogId.value ? '编辑共享记忆' : '新增共享记忆')
+const memoryEmpty = computed(() => !data.value?.memory?.trim())
+const userEmpty = computed(() => !data.value?.user?.trim())
+const soulEmpty = computed(() => !data.value?.soul?.trim())
+const familyLogsEmpty = computed(() => familyLogs.value.length === 0)
+const displayMemory = computed(() => (data.value?.memory || '').replace(/搂/g, '\n\n'))
+const displayUser = computed(() => (data.value?.user || '').replace(/搂/g, '\n\n'))
+const displaySoul = computed(() => (data.value?.soul || '').replace(/搂/g, '\n\n'))
 
 onMounted(async () => {
   await gatewayStore.fetchStatus()
@@ -51,11 +60,10 @@ onMounted(async () => {
 })
 
 watch(selectedGateway, () => {
-  if (selectedGateway.value) {
-    editingSection.value = null
-    editContent.value = ''
-    loadMemory()
-  }
+  if (!selectedGateway.value) return
+  editingSection.value = null
+  editContent.value = ''
+  loadMemory()
 })
 
 async function loadMemory() {
@@ -81,6 +89,22 @@ async function loadFamilyLogs() {
   } catch (err: any) {
     message.error(err.message)
   }
+}
+
+function formatDatetimeInput(ts: number): string {
+  const d = new Date(ts * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatTime(ts: number | null): string {
+  if (!ts) return ''
+  return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatFullTime(ts: number | null): string {
+  if (!ts) return ''
+  return new Date(ts * 1000).toLocaleString()
 }
 
 function openFamilyLogModal() {
@@ -131,11 +155,8 @@ async function handleSaveFamilyLog() {
       tags: form.tags.trim(),
       importance: form.importance,
     }
-    if (editingFamilyLogId.value) {
-      await updateFamilyLog(editingFamilyLogId.value, payload)
-    } else {
-      await addFamilyLog(payload)
-    }
+    if (editingFamilyLogId.value) await updateFamilyLog(editingFamilyLogId.value, payload)
+    else await addFamilyLog(payload)
     familyLogModalVisible.value = false
     editingFamilyLogId.value = null
     await loadFamilyLogs()
@@ -182,49 +203,17 @@ async function handleSave() {
     saving.value = false
   }
 }
-
-function formatTime(ts: number | null): string {
-  if (!ts) return ''
-  return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-function formatFullTime(ts: number | null): string {
-  if (!ts) return ''
-  return new Date(ts * 1000).toLocaleString()
-}
-
-function formatDatetimeInput(ts: number): string {
-  const d = new Date(ts * 1000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-const familyLogModalTitle = computed(() => editingFamilyLogId.value ? '编辑共享记忆' : '新增共享记忆')
-const memoryEmpty = computed(() => !data.value?.memory?.trim())
-const userEmpty = computed(() => !data.value?.user?.trim())
-const soulEmpty = computed(() => !data.value?.soul?.trim())
-const familyLogsEmpty = computed(() => familyLogs.value.length === 0)
-const displayMemory = computed(() => (data.value?.memory || '').replace(/§/g, '\n\n'))
-const displayUser = computed(() => (data.value?.user || '').replace(/§/g, '\n\n'))
-const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n'))
 </script>
 
 <template>
   <div class="memory-view">
     <header class="page-header">
       <h2 class="header-title">{{ t('memory.title') }}</h2>
-      <NButton size="small" quaternary @click="loadMemory">
-        {{ t('memory.refresh') }}
-      </NButton>
+      <NButton size="small" quaternary @click="loadMemory">{{ t('memory.refresh') }}</NButton>
     </header>
 
     <NTabs v-if="gatewayTabs.length > 0" v-model:value="selectedGateway" type="line" class="gateway-tabs">
-      <NTabPane
-        v-for="gateway in gatewayTabs"
-        :key="gateway.profile"
-        :name="gateway.profile"
-        :tab="gateway.display_name || gateway.profile"
-      />
+      <NTabPane v-for="gateway in gatewayTabs" :key="gateway.profile" :name="gateway.profile" :tab="gateway.display_name || gateway.profile" />
     </NTabs>
 
     <div class="memory-content">
@@ -374,18 +363,18 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   flex-direction: column;
 }
 
+.gateway-tabs {
+  flex-shrink: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid $border-color;
+}
+
 .memory-content {
   flex: 1;
   overflow: hidden;
   padding: 20px;
   display: flex;
   flex-direction: column;
-}
-
-.gateway-tabs {
-  flex-shrink: 0;
-  padding: 0 20px;
-  border-bottom: 1px solid $border-color;
 }
 
 .memory-loading {
@@ -448,9 +437,14 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   color: $text-primary;
 }
 
+.section-mtime,
+.empty-text {
+  font-size: 13px;
+  color: $text-muted;
+}
+
 .section-mtime {
   font-size: 11px;
-  color: $text-muted;
 }
 
 .section-body {
@@ -461,9 +455,7 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
 }
 
 .empty-text {
-  color: $text-muted;
   font-style: italic;
-  font-size: 13px;
 }
 
 .section-edit {
