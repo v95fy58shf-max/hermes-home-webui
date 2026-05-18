@@ -91,11 +91,6 @@ const router = createRouter({
       component: () => import('@/views/hermes/TerminalView.vue'),
     },
     {
-      path: '/hermes/group-chat',
-      name: 'hermes.groupChat',
-      component: () => import('@/views/hermes/GroupChatView.vue'),
-    },
-    {
       path: '/hermes/files',
       name: 'hermes.files',
       component: () => import('@/views/hermes/FilesView.vue'),
@@ -108,7 +103,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.public) {
     // Already has key, skip login
     if (to.name === 'login' && hasApiKey()) {
-      next({ path: '/hermes/chat' })
+      next({ path: '/hermes/gateways' })
       return
     }
     next()

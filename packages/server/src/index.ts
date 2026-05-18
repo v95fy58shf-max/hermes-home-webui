@@ -16,12 +16,11 @@ import { setupTerminalWebSocket } from './routes/hermes/terminal'
 import { setupKanbanEventsWebSocket } from './routes/hermes/kanban-events'
 import { startVersionCheck } from './routes/health'
 import { registerRoutes } from './routes'
-import { setGroupChatServer } from './routes/hermes/group-chat'
 import { setChatRunServer } from './routes/hermes/chat-run'
-import { GroupChatServer } from './services/hermes/group-chat'
 import { ChatRunSocket } from './services/hermes/run-chat'
 import { startAgentBridgeManager } from './services/hermes/agent-bridge'
 import { logger } from './services/logger'
+import { Server as SocketIOServer } from 'socket.io'
 
 // Injected by esbuild at build time; fallback to reading package.json in dev mode
 declare const __APP_VERSION__: string
@@ -148,23 +147,24 @@ export async function bootstrap() {
   setupKanbanEventsWebSocket(servers)
   console.log('[bootstrap] terminal + kanban websocket setup')
 
-  // Group chat Socket.IO (must be after server is created)
-  const groupChatServer = new GroupChatServer(servers)
-  setGroupChatServer(groupChatServer)
-  groupChatServer.setGatewayManager(getGatewayManagerInstance())
+  // Chat run Socket.IO (must be after server is created)
+  const io = new SocketIOServer(servers[0], {
+    cors: { origin: '*' },
+    pingInterval: 25_000,
+    pingTimeout: 90_000,
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60_000,
+      skipMiddlewares: true,
+    },
+  })
+  servers.slice(1).forEach((httpServer) => io.attach(httpServer))
 
   // Chat run Socket.IO — shares the same Server instance, just adds /chat-run namespace
-  chatRunServer = new ChatRunSocket(groupChatServer.getIO(), getGatewayManagerInstance())
+  chatRunServer = new ChatRunSocket(io, getGatewayManagerInstance())
   setChatRunServer(chatRunServer)
   chatRunServer.init()
 
   // Session deleter — periodically drain pending session deletes
-  const { SessionDeleter } = await import('./services/hermes/session-deleter')
-  const sessionDeleter = SessionDeleter.getInstance()
-  const activeProfile = process.env.PROFILE || 'default'
-  sessionDeleter.start(activeProfile)
-  console.log('[bootstrap] session deleter started, profile=%s', activeProfile)
-
   // Catch-all: destroy upgrade requests not handled by terminal or Socket.IO
   servers.forEach((httpServer) => {
     httpServer.on('upgrade', (req: any, socket: any) => {
@@ -182,8 +182,6 @@ export async function bootstrap() {
   logger.info('Server: http://localhost:%d (LAN: http://%s:%d)', config.port, localIp, config.port)
 
   // Restore group chat agents after server is ready.
-  groupChatServer.restoreWhenReady()
-
   servers.forEach((httpServer) => {
     httpServer.on('error', (err: any) => {
       console.error('[bootstrap] server error:', err.code || err.message)
@@ -191,7 +189,7 @@ export async function bootstrap() {
     })
   })
 
-  bindShutdown(servers, groupChatServer, chatRunServer, agentBridgeManager)
+  bindShutdown(servers, io, chatRunServer, agentBridgeManager)
   startVersionCheck()
 }
 

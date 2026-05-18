@@ -6,9 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { getThemeOverrides } from '@/styles/theme'
 import { useTheme } from '@/composables/useTheme'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
-import { useKeyboard } from '@/composables/useKeyboard'
 import { useAppStore } from '@/stores/hermes/app'
-import SessionSearchModal from '@/components/hermes/chat/SessionSearchModal.vue'
 
 const { isDark, isComic } = useTheme()
 const { t } = useI18n()
@@ -49,7 +47,6 @@ onUnmounted(() => {
   appStore.stopHealthPolling()
 })
 
-useKeyboard()
 </script>
 
 <template>
@@ -70,7 +67,6 @@ useKeyboard()
               <router-view />
             </main>
           </div>
-          <SessionSearchModal />
         </NNotificationProvider>
       </NDialogProvider>
     </NMessageProvider>

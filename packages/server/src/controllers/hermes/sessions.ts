@@ -13,12 +13,11 @@ import { deleteUsage, getUsage, getUsageBatch } from '../../db/hermes/usage-stor
 import type { UsageStatsModelRow, UsageStatsDailyRow } from '../../db/hermes/usage-store'
 import { getModelContextLength } from '../../services/hermes/model-context'
 import { getActiveProfileName } from '../../services/hermes/hermes-profile'
-import { getGroupChatServer } from '../../routes/hermes/group-chat'
 import { logger } from '../../services/logger'
 import type { ConversationSummary } from '../../services/hermes/conversations'
 
 function getPendingDeletedSessionIds(): Set<string> {
-  return getGroupChatServer()?.getStorage().getPendingDeletedSessionIds() || new Set<string>()
+  return new Set<string>()
 }
 
 function filterPendingDeletedSessions<T extends { id: string }>(items: T[]): T[] {

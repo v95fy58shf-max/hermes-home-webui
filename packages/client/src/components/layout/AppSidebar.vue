@@ -5,10 +5,8 @@ import { useI18n } from "vue-i18n";
 import { NButton, NModal, useMessage } from "naive-ui";
 import { useAppStore } from "@/stores/hermes/app";
 import ModelSelector from "./ModelSelector.vue";
-import ProfileSelector from "./ProfileSelector.vue";
 import LanguageSwitch from "./LanguageSwitch.vue";
 import ThemeSwitch from "./ThemeSwitch.vue";
-import { useSessionSearch } from '@/composables/useSessionSearch'
 import { changelog } from "@/data/changelog";
 
 const { t } = useI18n();
@@ -16,7 +14,6 @@ const message = useMessage();
 const route = useRoute();
 const router = useRouter();
 const appStore = useAppStore();
-const { openSessionSearch } = useSessionSearch();
 const selectedKey = computed(() => route.name as string);
 const logoPath = '/logo.png';
 
@@ -62,7 +59,7 @@ function openChangelog() {
 
 <template>
   <aside class="sidebar" :class="{ open: appStore.sidebarOpen, collapsed: appStore.sidebarCollapsed }">
-    <div class="sidebar-logo" @click="router.push('/hermes/chat')">
+    <div class="sidebar-logo" @click="router.push('/hermes/gateways')">
       <img :src="logoPath" alt="Hermes" class="logo-img" />
       <span class="logo-text">Hermes</span>
       <!-- <video class="logo-dance" :src="isDark ? danceVideoDark : danceVideoLight" autoplay loop muted playsinline /> -->
@@ -85,12 +82,6 @@ function openChangelog() {
           </svg>
         </div>
         <div v-show="!isGroupCollapsed('conversation')">
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.chat' }" @click="handleNav('hermes.chat')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>{{ t("sidebar.chat") }}</span>
-          </button>
           <button class="nav-item" :class="{ active: selectedKey === 'hermes.history' }" @click="handleNav('hermes.history')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -98,26 +89,6 @@ function openChangelog() {
             </svg>
             <span>{{ t("sidebar.history") }}</span>
           </button>
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.groupChat' }" @click="handleNav('hermes.groupChat')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span>{{ t("sidebar.groupChat") }}<span class="beta-tag">(beta)</span></span>
-          </button>
-          <button class="nav-item" @click="openSessionSearch">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <span>{{ t("sidebar.search") }}</span>
-          </button>
-          <a class="nav-item fun-link" href="https://apikey.fun/register?aff=LIBAPI" target="_blank" rel="noopener noreferrer">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            <span>{{ t('sidebar.apiRelay') }}</span>
-          </a>
         </div>
       </div>
 
@@ -247,13 +218,6 @@ function openChangelog() {
             </svg>
             <span>{{ t("sidebar.gateways") }}</span>
           </button>
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.profiles' }" @click="handleNav('hermes.profiles')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <span>{{ t("sidebar.profiles") }}</span>
-          </button>
           <button class="nav-item" :class="{ active: selectedKey === 'hermes.settings' }" @click="handleNav('hermes.settings')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3" />
@@ -265,7 +229,6 @@ function openChangelog() {
       </div>
     </nav>
 
-    <ProfileSelector />
     <ModelSelector />
 
     <div class="sidebar-footer">
