@@ -2,13 +2,15 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as profilesApi from '@/api/hermes/profiles'
 import type { HermesProfile, HermesProfileDetail } from '@/api/hermes/profiles'
+import { MASTER_PROFILE } from '@/api/client'
 
 const ACTIVE_PROFILE_STORAGE_KEY = 'hermes_active_profile_name'
+const storedActiveProfile = localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY)
 
 export const useProfilesStore = defineStore('profiles', () => {
   const profiles = ref<HermesProfile[]>([])
   // 初始化时同步读 localStorage，确保其他 store（如 chat）在启动时能拿到 profile name
-  const activeProfileName = ref<string | null>(localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY))
+  const activeProfileName = ref<string | null>(storedActiveProfile && storedActiveProfile !== 'default' ? storedActiveProfile : MASTER_PROFILE)
   const activeProfile = ref<HermesProfile | null>(null)
   const detailMap = ref<Record<string, HermesProfileDetail>>({})
   const loading = ref(false)

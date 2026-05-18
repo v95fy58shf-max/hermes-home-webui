@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { NButton, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, useMessage } from 'naive-ui'
+import { computed, onMounted, ref, watch } from 'vue'
+import { NButton, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import MarkdownRenderer from '@/components/hermes/chat/MarkdownRenderer.vue'
 import { addFamilyLog, deleteFamilyLog, fetchFamilyLogs, fetchMemory, saveMemory, updateFamilyLog, type FamilyLogEntry, type MemoryData } from '@/api/hermes/skills'
+import { useGatewayStore } from '@/stores/hermes/gateways'
 
 const { t } = useI18n()
 const message = useMessage()
+const gatewayStore = useGatewayStore()
 const loading = ref(false)
 const data = ref<MemoryData | null>(null)
+const selectedGateway = ref('')
 const editingSection = ref<'memory' | 'user' | 'soul' | null>(null)
 const editContent = ref('')
 const saving = ref(false)
@@ -37,13 +40,29 @@ const importanceOptions = [
   { label: '重要度 5', value: 5 },
 ]
 
-onMounted(loadMemory)
+const gatewayTabs = computed(() => gatewayStore.gateways)
+
+onMounted(async () => {
+  await gatewayStore.fetchStatus()
+  if (!selectedGateway.value && gatewayStore.gateways.length > 0) {
+    selectedGateway.value = gatewayStore.gateways[0].profile
+  }
+  await loadMemory()
+})
+
+watch(selectedGateway, () => {
+  if (selectedGateway.value) {
+    editingSection.value = null
+    editContent.value = ''
+    loadMemory()
+  }
+})
 
 async function loadMemory() {
   loading.value = true
   try {
     const [memoryData, logs] = await Promise.all([
-      fetchMemory(),
+      fetchMemory(selectedGateway.value || undefined),
       fetchFamilyLogs(familyLogQuery.value, 80, familyLogMinImportance.value),
     ])
     data.value = memoryData
@@ -152,7 +171,7 @@ async function handleSave() {
   if (!editingSection.value) return
   saving.value = true
   try {
-    await saveMemory(editingSection.value, editContent.value)
+    await saveMemory(editingSection.value, editContent.value, selectedGateway.value || undefined)
     await loadMemory()
     editingSection.value = null
     editContent.value = ''
@@ -198,6 +217,15 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
         {{ t('memory.refresh') }}
       </NButton>
     </header>
+
+    <NTabs v-if="gatewayTabs.length > 0" v-model:value="selectedGateway" type="line" class="gateway-tabs">
+      <NTabPane
+        v-for="gateway in gatewayTabs"
+        :key="gateway.profile"
+        :name="gateway.profile"
+        :tab="gateway.display_name || gateway.profile"
+      />
+    </NTabs>
 
     <div class="memory-content">
       <div v-if="loading && !data" class="memory-loading">{{ t('common.loading') }}</div>
@@ -352,6 +380,12 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   padding: 20px;
   display: flex;
   flex-direction: column;
+}
+
+.gateway-tabs {
+  flex-shrink: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid $border-color;
 }
 
 .memory-loading {

@@ -2,11 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as configApi from '@/api/hermes/config'
 import type { DisplayConfig, AgentConfig, MemoryConfig, SessionResetConfig, PrivacyConfig, ApprovalConfig } from '@/api/hermes/config'
+import { MASTER_PROFILE } from '@/api/client'
 
 export const useSettingsStore = defineStore('settings', () => {
   const loading = ref(false)
   const saving = ref(false)
-  const profile = ref('default')
+  const profile = ref(MASTER_PROFILE)
 
   const display = ref<DisplayConfig>({})
   const agent = ref<AgentConfig>({})
@@ -29,7 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function fetchSettings(targetProfile = profile.value) {
     loading.value = true
     try {
-      profile.value = targetProfile || 'default'
+      profile.value = targetProfile || MASTER_PROFILE
       const data = await configApi.fetchConfig(undefined, profile.value)
       display.value = data.display || {}
       agent.value = data.agent || {}

@@ -1,10 +1,9 @@
 import { startRunViaSocket, resumeSession, registerSessionHandlers, unregisterSessionHandlers, getChatRunSocket, respondToolApproval, type RunEvent, type ContentBlock as ContentBlockImport } from '@/api/hermes/chat'
 import { deleteSession as deleteSessionApi, fetchSession, fetchSessions, type HermesMessage, type SessionSummary } from '@/api/hermes/sessions'
-import { getApiKey } from '@/api/client'
+import { getApiKey, MASTER_PROFILE } from '@/api/client'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAppStore } from './app'
-import { useProfilesStore } from './profiles'
 import { useSettingsStore } from './settings'
 import { primeCompletionSound, playCompletionSound } from '@/utils/completion-sound'
 import { detectThinkingBoundary } from '@/utils/thinking-parser'
@@ -252,11 +251,7 @@ const LEGACY_STORAGE_KEY = 'hermes_active_session'
 // 从 profiles store 的 activeProfileName（同步 localStorage）读取，
 // 避免异步加载导致 chat store 初始化时拿到 null。
 function getProfileName(): string {
-  try {
-    return useProfilesStore().activeProfileName || 'default'
-  } catch {
-    return 'default'
-  }
+  return MASTER_PROFILE
 }
 
 function storageKey(): string { return STORAGE_KEY_PREFIX + getProfileName() }

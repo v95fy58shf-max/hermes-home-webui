@@ -1,5 +1,5 @@
 import * as hermesCli from '../../services/hermes/hermes-cli'
-import { listSessionSummaries, getUsageStatsFromDb, getSessionDetailFromDb } from '../../db/hermes/sessions-db'
+import { listSessionSummaries, getUsageStatsFromDb, getSessionDetailFromDb, getSessionDetailFromDbWithProfile } from '../../db/hermes/sessions-db'
 import {
   listSessions as localListSessions,
   searchSessions as localSearchSessions,
@@ -15,6 +15,15 @@ import { getModelContextLength } from '../../services/hermes/model-context'
 import { getActiveProfileName } from '../../services/hermes/hermes-profile'
 import { logger } from '../../services/logger'
 import type { ConversationSummary } from '../../services/hermes/conversations'
+
+function normalizeProfileName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function getRequestProfile(ctx: any): string {
+  const fromQuery = typeof ctx.query?.profile === 'string' ? ctx.query.profile : ''
+  return normalizeProfileName(fromQuery || getActiveProfileName())
+}
 
 function getPendingDeletedSessionIds(): Set<string> {
   return new Set<string>()
@@ -34,7 +43,7 @@ export async function listConversations(ctx: any) {
   const source = (ctx.query.source as string) || undefined
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
 
-  const profile = getActiveProfileName()
+  const profile = getRequestProfile(ctx)
   const sessions = localListSessions(profile, source, limit && limit > 0 ? limit : 200)
   const summaries: ConversationSummary[] = sessions.map(s => ({
     id: s.id,
@@ -96,7 +105,7 @@ export async function getConversationMessages(ctx: any) {
 export async function list(ctx: any) {
   const source = (ctx.query.source as string) || undefined
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
-  const profile = getActiveProfileName()
+  const profile = getRequestProfile(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
   const allSessions = localListSessions(profile, source, effectiveLimit)
@@ -110,7 +119,7 @@ export async function list(ctx: any) {
 export async function listHermesSessions(ctx: any) {
   const source = (ctx.query.source as string) || undefined
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
-  const profile = getActiveProfileName()
+  const profile = getRequestProfile(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
   const allSessions = await listSessionSummaries(source, effectiveLimit, profile)
@@ -120,7 +129,7 @@ export async function listHermesSessions(ctx: any) {
 export async function search(ctx: any) {
   const q = typeof ctx.query.q === 'string' ? ctx.query.q : ''
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
-  const profile = getActiveProfileName()
+  const profile = getRequestProfile(ctx)
   const results = localSearchSessions(profile, q, limit && limit > 0 ? limit : 20)
   ctx.body = { results: filterPendingDeletedSessions(results) }
 }
@@ -140,9 +149,10 @@ export async function get(ctx: any) {
  * GET /api/hermes/sessions/hermes/:id
  */
 export async function getHermesSession(ctx: any) {
+  const profile = getRequestProfile(ctx)
   // Try database first (consistent with listHermesSessions)
   try {
-    const session = await getSessionDetailFromDb(ctx.params.id)
+    const session = profile ? await getSessionDetailFromDbWithProfile(ctx.params.id, profile) : await getSessionDetailFromDb(ctx.params.id)
     if (session && session.source !== 'api_server') {
       ctx.body = { session }
       return

@@ -6,6 +6,7 @@ export interface GatewayStatus {
   host: string
   url: string
   running: boolean
+  role?: 'master' | 'slave'
   home_slave?: boolean
   member_name?: string
   display_name?: string

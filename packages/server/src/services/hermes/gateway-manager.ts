@@ -37,6 +37,7 @@ import yaml from 'js-yaml'
 import { logger } from '../logger'
 import { detectHermesHome, getHermesBin } from './hermes-path'
 import { safeFileStore } from '../safe-file-store'
+import { getManagedProfileName } from './hermes-profile'
 
 const execFileAsync = promisify(execFile)
 
@@ -578,7 +579,8 @@ export class GatewayManager {
 
   /** 检测所有 profile 的网关状态 */
   async listAll(): Promise<GatewayStatus[]> {
-    const profiles = await this.listProfiles()
+    const managedProfile = getManagedProfileName()
+    const profiles = (await this.listProfiles()).filter(name => !(managedProfile !== 'default' && name === 'default'))
     const statuses = await Promise.all(profiles.map(name => this.detectStatus(name)))
     return statuses
   }
@@ -909,21 +911,22 @@ export class GatewayManager {
    */
   async startAll(): Promise<void> {
     // 确保使用 default profile 启动网关
+    const managedProfile = getManagedProfileName()
     const currentProfile = this.getActiveProfile()
-    if (currentProfile !== 'default') {
-      logger.info('Current profile is "%s", switching to "default" for gateway startup', currentProfile)
+    if (currentProfile !== managedProfile) {
+      logger.info('Current profile is "%s", switching to "%s" for gateway startup', currentProfile, managedProfile)
       try {
-        await execFileAsync(HERMES_BIN, ['profile', 'use', 'default'], {
+        await execFileAsync(HERMES_BIN, ['profile', 'use', managedProfile], {
           timeout: 10000,
           windowsHide: true,
         })
-        this.setActiveProfile('default')
+        this.setActiveProfile(managedProfile)
         logger.info('Waiting for profile switch to take effect...')
         // 等待一下让 profile 切换完全生效，确保配置文件更新完成
         await new Promise(resolve => setTimeout(resolve, 2000))
-        logger.info('Successfully switched to default profile')
+        logger.info('Successfully switched to %s profile', managedProfile)
       } catch (err) {
-        logger.error(err, 'Failed to switch to default profile, continuing with current profile')
+        logger.error(err, 'Failed to switch to managed profile, continuing with current profile')
       }
     }
 

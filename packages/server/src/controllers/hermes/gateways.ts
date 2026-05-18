@@ -5,11 +5,11 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { getGatewayManagerInstance } from '../../services/gateway-bootstrap'
 import { detectHermesRootHome, getHermesBin } from '../../services/hermes/hermes-path'
+import { HOME_MASTER_PROFILE, getProfileDisplayName } from '../../services/hermes/hermes-profile'
 import { safeFileStore } from '../../services/safe-file-store'
 
 const execFileAsync = promisify(execFile)
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{1,31}$/
-const HOME_MASTER_PROFILE = process.env.HERMES_HOME_MASTER_PROFILE || 'home-master'
 const HOME_MASTER_INCOMING_URL = process.env.HERMES_HOME_MASTER_URL || 'http://127.0.0.1:18080/incoming'
 const HOME_CONFIG_PATH = process.env.HERMES_HOME_CONFIG || '/opt/hermes-home/config.yaml'
 const CHANNEL_SECTIONS = [
@@ -211,22 +211,35 @@ async function addSlaveToHomeConfig(name: string, dir: string): Promise<void> {
 }
 
 async function attachHomeMemberNames(gateways: any[]): Promise<any[]> {
-  if (!existsSync(HOME_CONFIG_PATH)) return gateways
+  const visibleGateways = gateways.filter(gateway => gateway.profile !== 'default')
+  if (!existsSync(HOME_CONFIG_PATH)) {
+    return visibleGateways.map((gateway) => ({
+      ...gateway,
+      role: gateway.profile === HOME_MASTER_PROFILE ? 'master' : 'slave',
+      display_name: getProfileDisplayName(gateway.profile),
+    })).sort((a, b) => (a.role === 'master' ? -1 : b.role === 'master' ? 1 : a.profile.localeCompare(b.profile)))
+  }
   try {
     const cfg = await safeFileStore.readYaml(HOME_CONFIG_PATH)
     const slaves = cfg.slaves || {}
-    return gateways.map((gateway) => {
+    return visibleGateways.map((gateway) => {
       const slave = slaves[gateway.profile] || {}
       const memberName = String(slave.member_name || '').trim()
+      const isMaster = gateway.profile === HOME_MASTER_PROFILE
       return {
         ...gateway,
+        role: isMaster ? 'master' : 'slave',
         home_slave: Boolean(slaves[gateway.profile]),
         member_name: memberName,
-        display_name: memberName || gateway.profile,
+        display_name: isMaster ? getProfileDisplayName(gateway.profile) : (memberName || gateway.profile),
       }
-    })
+    }).sort((a, b) => (a.role === 'master' ? -1 : b.role === 'master' ? 1 : a.profile.localeCompare(b.profile)))
   } catch {
-    return gateways
+    return visibleGateways.map((gateway) => ({
+      ...gateway,
+      role: gateway.profile === HOME_MASTER_PROFILE ? 'master' : 'slave',
+      display_name: getProfileDisplayName(gateway.profile),
+    })).sort((a, b) => (a.role === 'master' ? -1 : b.role === 'master' ? 1 : a.profile.localeCompare(b.profile)))
   }
 }
 

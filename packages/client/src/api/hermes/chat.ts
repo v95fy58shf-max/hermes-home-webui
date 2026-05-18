@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client'
-import { request, getBaseUrlValue, getApiKey } from '../client'
+import { request, getBaseUrlValue, getApiKey, MASTER_PROFILE } from '../client'
 
 export type ContentBlock =
   | { type: 'text'; text: string }
@@ -397,16 +397,7 @@ export function connectChatRun(): Socket {
   const baseUrl = getBaseUrlValue()
   const token = getApiKey()
 
-  // Get active profile from store (authoritative source)
-  let profile = 'default'
-  try {
-    const { useProfilesStore } = require('@/stores/hermes/profiles')
-    const profilesStore = useProfilesStore()
-    profile = profilesStore.activeProfileName || 'default'
-  } catch {
-    // Fallback to localStorage during early initialization
-    profile = localStorage.getItem('hermes_active_profile_name') || 'default'
-  }
+  const profile = MASTER_PROFILE
 
   chatRunSocket = io(`${baseUrl}/chat-run`, {
     auth: { token },

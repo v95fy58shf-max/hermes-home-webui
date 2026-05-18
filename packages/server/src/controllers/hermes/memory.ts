@@ -1,7 +1,8 @@
 import { DatabaseSync } from 'node:sqlite'
-import { writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { safeReadFile, safeStat, getHermesDir } from '../../services/config-helpers'
+import { getActiveProfileName, getProfileDir } from '../../services/hermes/hermes-profile'
 
 const HOME_DB_PATH = process.env.HERMES_HOME_DB || '/opt/hermes-home/home.db'
 
@@ -27,8 +28,23 @@ function openHomeDb(): DatabaseSync {
   return db
 }
 
+function normalizeProfileName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function getRequestProfile(ctx: any): string {
+  const fromQuery = typeof ctx.query?.profile === 'string' ? ctx.query.profile : ''
+  const fromBody = typeof ctx.request?.body?.profile === 'string' ? ctx.request.body.profile : ''
+  return normalizeProfileName(fromBody || fromQuery || getActiveProfileName())
+}
+
+function getMemoryDir(ctx: any): string {
+  const profile = getRequestProfile(ctx)
+  return profile ? getProfileDir(profile) : getHermesDir()
+}
+
 export async function get(ctx: any) {
-  const hd = getHermesDir()
+  const hd = getMemoryDir(ctx)
   const memoryPath = join(hd, 'memories', 'MEMORY.md')
   const userPath = join(hd, 'memories', 'USER.md')
   const soulPath = join(hd, 'SOUL.md')
@@ -55,13 +71,15 @@ export async function save(ctx: any) {
     return
   }
   let filePath: string
+  const hd = getMemoryDir(ctx)
   if (section === 'soul') {
-    filePath = join(getHermesDir(), 'SOUL.md')
+    filePath = join(hd, 'SOUL.md')
   } else {
     const fileName = section === 'memory' ? 'MEMORY.md' : 'USER.md'
-    filePath = join(getHermesDir(), 'memories', fileName)
+    filePath = join(hd, 'memories', fileName)
   }
   try {
+    if (section !== 'soul') await mkdir(join(hd, 'memories'), { recursive: true })
     await writeFile(filePath, content, 'utf-8')
     ctx.body = { success: true }
   } catch (err: any) {

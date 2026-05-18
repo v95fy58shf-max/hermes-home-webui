@@ -44,7 +44,7 @@ watch(selectedGateway, (profile) => {
           v-for="gateway in runningGateways"
           :key="gateway.profile"
           :name="gateway.profile"
-          :tab="`${gateway.profile} · ${gateway.port}`"
+          :tab="`${gateway.display_name || gateway.profile} · ${gateway.port}`"
         />
       </NTabs>
 

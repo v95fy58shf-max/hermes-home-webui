@@ -1,6 +1,8 @@
 import router from '@/router'
 
 const DEFAULT_BASE_URL = ''
+export const MASTER_PROFILE = 'home-master'
+export const MASTER_DISPLAY_NAME = 'master'
 
 function getBaseUrl(): string {
   return localStorage.getItem('hermes_server_url') || DEFAULT_BASE_URL
@@ -31,16 +33,7 @@ export function hasApiKey(): boolean {
  * Reads from store first (authoritative source), falls back to localStorage.
  */
 function getActiveProfileName(): string | null {
-  try {
-    // Dynamic import to avoid circular dependency
-    const { useProfilesStore } = require('@/stores/hermes/profiles')
-    const store = useProfilesStore()
-    // Store is the source of truth - it's updated from /api/hermes/profiles
-    return store.activeProfileName
-  } catch {
-    // Fallback to localStorage if store is not available (e.g., during initialization)
-    return localStorage.getItem('hermes_active_profile_name')
-  }
+  return MASTER_PROFILE
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

@@ -2,9 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useChatStore, type Session } from '@/stores/hermes/chat'
 import { useAppStore } from '@/stores/hermes/app'
-import { useProfilesStore } from '@/stores/hermes/profiles'
+import { useGatewayStore } from '@/stores/hermes/gateways'
 import { useSessionBrowserPrefsStore } from '@/stores/hermes/session-browser-prefs'
-import { NButton, NTooltip, useMessage } from 'naive-ui'
+import { NButton, NTabs, NTabPane, NTooltip, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { getSourceLabel } from '@/shared/session-display'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -14,7 +14,7 @@ import { fetchHermesSessions, fetchHermesSession, type SessionSummary } from '@/
 
 const chatStore = useChatStore()
 const appStore = useAppStore()
-const profilesStore = useProfilesStore()
+const gatewayStore = useGatewayStore()
 const sessionBrowserPrefsStore = useSessionBrowserPrefsStore()
 const message = useMessage()
 const { t } = useI18n()
@@ -23,16 +23,22 @@ const { t } = useI18n()
 const hermesSessions = ref<SessionSummary[]>([])
 const hermesSessionsLoading = ref(false)
 const hermesSessionsLoaded = ref(false)
+const selectedGateway = ref('')
 // History page's own selected session (independent from chatStore)
 const historySessionId = ref<string | null>(null)
 const historySession = ref<Session | null>(null)
+const gatewayTabs = computed(() => gatewayStore.gateways)
 
 async function loadHermesSessions() {
   if (hermesSessionsLoading.value) return
   hermesSessionsLoading.value = true
   try {
-    hermesSessions.value = await fetchHermesSessions()
+    hermesSessions.value = await fetchHermesSessions(undefined, undefined, selectedGateway.value || undefined)
     hermesSessionsLoaded.value = true
+    const firstSession = hermesSessions.value.find(s => s.source === 'cli') || hermesSessions.value[0]
+    if (firstSession && (!historySessionId.value || !hermesSessions.value.find(s => s.id === historySessionId.value))) {
+      await handleSessionClick(firstSession.id)
+    }
   } catch (err) {
     console.error('Failed to load Hermes sessions:', err)
   } finally {
@@ -49,7 +55,7 @@ const isMobile = ref(false)
 
 async function handleSessionClick(sessionId: string) {
   // First, fetch the Hermes session detail
-  const sessionDetail = await fetchHermesSession(sessionId)
+  const sessionDetail = await fetchHermesSession(sessionId, selectedGateway.value || undefined)
   if (!sessionDetail) {
     message.error(t('chat.sessionNotFound'))
     return
@@ -112,7 +118,10 @@ function handleMobileChange(e: MediaQueryListEvent | MediaQueryList) {
 
 onMounted(async () => {
   appStore.loadModels()
-  await profilesStore.fetchProfiles()
+  await gatewayStore.fetchStatus()
+  if (!selectedGateway.value && gatewayStore.gateways.length > 0) {
+    selectedGateway.value = gatewayStore.gateways[0].profile
+  }
   await loadHermesSessions()
 
   mobileQuery = window.matchMedia('(max-width: 768px)')
@@ -230,25 +239,12 @@ watch(groupedSessions, groups => {
   }
 }, { once: true })
 
-// Auto-load first CLI session when Hermes sessions are loaded
-watch(hermesSessionsLoaded, (loaded) => {
-  if (loaded && hermesSessions.value.length > 0) {
-    // Only auto-load if no session is currently active
-    if (!historySessionId.value || !hermesSessions.value.find(s => s.id === historySessionId.value)) {
-      // Find first CLI session.
-      const firstCliSession = hermesSessions.value.find(s => s.source === 'cli')
-      if (firstCliSession) {
-        // Ensure the CLI group is expanded
-        if (collapsedGroups.value.has(firstCliSession.source)) {
-          collapsedGroups.value = new Set([...collapsedGroups.value].filter(s => s !== firstCliSession.source))
-        }
-        // Load session details
-        handleSessionClick(firstCliSession.id)
-      }
-      // If no CLI session exists, don't auto-load any session
-    }
-  }
-}, { once: true })
+watch(selectedGateway, async () => {
+  historySessionId.value = null
+  historySession.value = null
+  hermesSessionsLoaded.value = false
+  await loadHermesSessions()
+})
 
 const activeSessionTitle = computed(() =>
   historySession.value?.title || t('chat.newChat'),
@@ -328,6 +324,14 @@ async function copySessionId(id?: string) {
     </aside>
 
     <div class="chat-main">
+      <NTabs v-if="gatewayTabs.length > 0" v-model:value="selectedGateway" type="line" class="gateway-tabs">
+        <NTabPane
+          v-for="gateway in gatewayTabs"
+          :key="gateway.profile"
+          :name="gateway.profile"
+          :tab="gateway.display_name || gateway.profile"
+        />
+      </NTabs>
       <header class="chat-header">
         <div class="header-left">
           <NButton quaternary size="small" @click="showSessions = !showSessions" circle>
@@ -647,6 +651,12 @@ async function copySessionId(id?: string) {
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+}
+
+.gateway-tabs {
+  flex-shrink: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid $border-color;
 }
 
 .chat-header {
