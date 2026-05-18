@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { NButton, NInput, NModal, NForm, NFormItem, NInputNumber, NSelect, NPopconfirm, useMessage } from 'naive-ui'
+import { computed, onMounted, ref } from 'vue'
+import { NButton, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import MarkdownRenderer from '@/components/hermes/chat/MarkdownRenderer.vue'
 import { addFamilyLog, deleteFamilyLog, fetchFamilyLogs, fetchMemory, saveMemory, updateFamilyLog, type FamilyLogEntry, type MemoryData } from '@/api/hermes/skills'
@@ -12,6 +12,7 @@ const data = ref<MemoryData | null>(null)
 const editingSection = ref<'memory' | 'user' | 'soul' | null>(null)
 const editContent = ref('')
 const saving = ref(false)
+
 const familyLogs = ref<FamilyLogEntry[]>([])
 const familyLogQuery = ref('')
 const familyLogMinImportance = ref(1)
@@ -27,6 +28,7 @@ const familyLogForm = ref({
   tags: '',
   importance: 3,
 })
+
 const importanceOptions = [
   { label: '全部重要度', value: 1 },
   { label: '重要度 2+', value: 2 },
@@ -40,7 +42,10 @@ onMounted(loadMemory)
 async function loadMemory() {
   loading.value = true
   try {
-    const [memoryData, logs] = await Promise.all([fetchMemory(), fetchFamilyLogs(familyLogQuery.value, 80, familyLogMinImportance.value)])
+    const [memoryData, logs] = await Promise.all([
+      fetchMemory(),
+      fetchFamilyLogs(familyLogQuery.value, 80, familyLogMinImportance.value),
+    ])
     data.value = memoryData
     familyLogs.value = logs
   } catch (err: any) {
@@ -127,7 +132,7 @@ async function handleDeleteFamilyLog(id: number) {
   try {
     await deleteFamilyLog(id)
     await loadFamilyLogs()
-    message.success('已删除家庭日志')
+    message.success('已删除共享记忆')
   } catch (err: any) {
     message.error(err.message)
   }
@@ -161,12 +166,7 @@ async function handleSave() {
 
 function formatTime(ts: number | null): string {
   if (!ts) return ''
-  return new Date(ts).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function formatFullTime(ts: number | null): string {
@@ -180,13 +180,11 @@ function formatDatetimeInput(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const familyLogModalTitle = computed(() => editingFamilyLogId.value ? '编辑家庭日志' : '新增家庭日志')
-
+const familyLogModalTitle = computed(() => editingFamilyLogId.value ? '编辑共享记忆' : '新增共享记忆')
 const memoryEmpty = computed(() => !data.value?.memory?.trim())
 const userEmpty = computed(() => !data.value?.user?.trim())
 const soulEmpty = computed(() => !data.value?.soul?.trim())
 const familyLogsEmpty = computed(() => familyLogs.value.length === 0)
-
 const displayMemory = computed(() => (data.value?.memory || '').replace(/§/g, '\n\n'))
 const displayUser = computed(() => (data.value?.user || '').replace(/§/g, '\n\n'))
 const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n'))
@@ -197,12 +195,6 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
     <header class="page-header">
       <h2 class="header-title">{{ t('memory.title') }}</h2>
       <NButton size="small" quaternary @click="loadMemory">
-        <template #icon>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </template>
         {{ t('memory.refresh') }}
       </NButton>
     </header>
@@ -210,211 +202,111 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
     <div class="memory-content">
       <div v-if="loading && !data" class="memory-loading">{{ t('common.loading') }}</div>
       <div v-else class="memory-sections">
-          <!-- My Notes -->
-          <div class="memory-section">
-            <div class="section-header">
-              <div class="section-title-row">
-                <span class="section-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </svg>
-                </span>
-                <span class="section-title">{{ t('memory.myNotes') }}</span>
-                <span v-if="data?.memory_mtime" class="section-mtime">{{ formatTime(data.memory_mtime) }}</span>
-              </div>
-              <NButton v-if="editingSection !== 'memory'" size="tiny" quaternary @click="startEdit('memory')">
-                <template #icon>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </template>
-                {{ t('common.edit') }}
-              </NButton>
+        <div class="memory-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <span class="section-title">{{ t('memory.myNotes') }}</span>
+              <span v-if="data?.memory_mtime" class="section-mtime">{{ formatTime(data.memory_mtime) }}</span>
             </div>
-
-            <!-- View mode -->
-            <div v-if="editingSection !== 'memory'" class="section-body">
-              <MarkdownRenderer v-if="!memoryEmpty" :content="displayMemory" />
-              <p v-else class="empty-text">{{ t('memory.noNotes') }}</p>
-            </div>
-
-            <!-- Edit mode -->
-            <div v-else class="section-edit">
-              <textarea
-                v-model="editContent"
-                class="edit-textarea"
-                :placeholder="t('memory.notesPlaceholder')"
-                spellcheck="false"
-              ></textarea>
-              <div class="edit-actions">
-                <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
-                <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
-              </div>
-            </div>
+            <NButton v-if="editingSection !== 'memory'" size="tiny" quaternary @click="startEdit('memory')">{{ t('common.edit') }}</NButton>
           </div>
-
-          <!-- User Profile -->
-          <div class="memory-section">
-            <div class="section-header">
-              <div class="section-title-row">
-                <span class="section-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </span>
-                <span class="section-title">{{ t('memory.userProfile') }}</span>
-                <span v-if="data?.user_mtime" class="section-mtime">{{ formatTime(data.user_mtime) }}</span>
-              </div>
-              <NButton v-if="editingSection !== 'user'" size="tiny" quaternary @click="startEdit('user')">
-                <template #icon>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </template>
-                {{ t('common.edit') }}
-              </NButton>
-            </div>
-
-            <!-- View mode -->
-            <div v-if="editingSection !== 'user'" class="section-body">
-              <MarkdownRenderer v-if="!userEmpty" :content="displayUser" />
-              <p v-else class="empty-text">{{ t('memory.noProfile') }}</p>
-            </div>
-
-            <!-- Edit mode -->
-            <div v-else class="section-edit">
-              <textarea
-                v-model="editContent"
-                class="edit-textarea"
-                :placeholder="t('memory.profilePlaceholder')"
-                spellcheck="false"
-              ></textarea>
-              <div class="edit-actions">
-                <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
-                <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
-              </div>
-            </div>
+          <div v-if="editingSection !== 'memory'" class="section-body">
+            <MarkdownRenderer v-if="!memoryEmpty" :content="displayMemory" />
+            <p v-else class="empty-text">{{ t('memory.noNotes') }}</p>
           </div>
-
-          <!-- Family Logs -->
-          <div class="memory-section">
-            <div class="section-header">
-              <div class="section-title-row">
-                <span class="section-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M3 3v18h18" />
-                    <path d="M7 14l3-3 3 2 5-6" />
-                  </svg>
-                </span>
-                <span class="section-title">家庭日志</span>
-                <span class="section-mtime">长期保存</span>
-              </div>
-              <NButton size="tiny" quaternary @click="openFamilyLogModal">
-                新增
-              </NButton>
-            </div>
-
-            <div class="section-body family-log-body">
-              <div class="family-log-toolbar">
-                <NInput
-                  v-model:value="familyLogQuery"
-                  size="small"
-                  clearable
-                  placeholder="搜索成员、标签或内容"
-                  @keyup.enter="loadFamilyLogs"
-                />
-                <NSelect
-                  v-model:value="familyLogMinImportance"
-                  size="small"
-                  class="family-log-importance-select"
-                  :options="importanceOptions"
-                  @update:value="loadFamilyLogs"
-                />
-                <NButton size="small" @click="loadFamilyLogs">搜索</NButton>
-              </div>
-              <div v-if="familyLogsEmpty" class="empty-text">
-                暂无家庭日志
-              </div>
-              <div v-else class="family-log-list">
-                <article v-for="log in familyLogs" :key="log.id" class="family-log-item">
-                  <div class="family-log-title-row">
-                    <strong>{{ log.title }}</strong>
-                    <span>{{ formatFullTime(log.occurred_at) }}</span>
-                  </div>
-                  <p>{{ log.content }}</p>
-                  <div class="family-log-meta">
-                    <span v-if="log.member_id">{{ log.member_id }}</span>
-                    <span v-if="log.gateway_id">{{ log.gateway_id }}</span>
-                    <span v-if="log.tags">{{ log.tags }}</span>
-                    <span>重要度 {{ log.importance }}</span>
-                  </div>
-                  <div class="family-log-actions">
-                    <NButton size="tiny" quaternary @click="openEditFamilyLogModal(log)">编辑</NButton>
-                    <NPopconfirm @positive-click="handleDeleteFamilyLog(log.id)">
-                      <template #trigger>
-                        <NButton size="tiny" quaternary type="error">删除</NButton>
-                      </template>
-                      删除这条家庭日志？
-                    </NPopconfirm>
-                  </div>
-                </article>
-              </div>
-            </div>
-          </div>
-
-          <!-- Soul -->
-          <div class="memory-section">
-            <div class="section-header">
-              <div class="section-title-row">
-                <span class="section-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <line x1="9" y1="9" x2="9.01" y2="9" />
-                    <line x1="15" y1="9" x2="15.01" y2="9" />
-                  </svg>
-                </span>
-                <span class="section-title">{{ t('memory.soul') }}</span>
-                <span v-if="data?.soul_mtime" class="section-mtime">{{ formatTime(data.soul_mtime) }}</span>
-              </div>
-              <NButton v-if="editingSection !== 'soul'" size="tiny" quaternary @click="startEdit('soul')">
-                <template #icon>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </template>
-                {{ t('common.edit') }}
-              </NButton>
-            </div>
-
-            <!-- View mode -->
-            <div v-if="editingSection !== 'soul'" class="section-body">
-              <MarkdownRenderer v-if="!soulEmpty" :content="displaySoul" />
-              <p v-else class="empty-text">{{ t('memory.noSoul') }}</p>
-            </div>
-
-            <!-- Edit mode -->
-            <div v-else class="section-edit">
-              <textarea
-                v-model="editContent"
-                class="edit-textarea"
-                :placeholder="t('memory.soulPlaceholder')"
-                spellcheck="false"
-              ></textarea>
-              <div class="edit-actions">
-                <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
-                <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
-              </div>
+          <div v-else class="section-edit">
+            <textarea v-model="editContent" class="edit-textarea" :placeholder="t('memory.notesPlaceholder')" spellcheck="false"></textarea>
+            <div class="edit-actions">
+              <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
+              <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
             </div>
           </div>
         </div>
+
+        <div class="memory-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <span class="section-title">{{ t('memory.userProfile') }}</span>
+              <span v-if="data?.user_mtime" class="section-mtime">{{ formatTime(data.user_mtime) }}</span>
+            </div>
+            <NButton v-if="editingSection !== 'user'" size="tiny" quaternary @click="startEdit('user')">{{ t('common.edit') }}</NButton>
+          </div>
+          <div v-if="editingSection !== 'user'" class="section-body">
+            <MarkdownRenderer v-if="!userEmpty" :content="displayUser" />
+            <p v-else class="empty-text">{{ t('memory.noProfile') }}</p>
+          </div>
+          <div v-else class="section-edit">
+            <textarea v-model="editContent" class="edit-textarea" :placeholder="t('memory.profilePlaceholder')" spellcheck="false"></textarea>
+            <div class="edit-actions">
+              <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
+              <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <span class="section-title">{{ t('memory.soul') }}</span>
+              <span v-if="data?.soul_mtime" class="section-mtime">{{ formatTime(data.soul_mtime) }}</span>
+            </div>
+            <NButton v-if="editingSection !== 'soul'" size="tiny" quaternary @click="startEdit('soul')">{{ t('common.edit') }}</NButton>
+          </div>
+          <div v-if="editingSection !== 'soul'" class="section-body">
+            <MarkdownRenderer v-if="!soulEmpty" :content="displaySoul" />
+            <p v-else class="empty-text">{{ t('memory.noSoul') }}</p>
+          </div>
+          <div v-else class="section-edit">
+            <textarea v-model="editContent" class="edit-textarea" :placeholder="t('memory.soulPlaceholder')" spellcheck="false"></textarea>
+            <div class="edit-actions">
+              <NButton size="small" @click="cancelEdit">{{ t('common.cancel') }}</NButton>
+              <NButton size="small" type="primary" :loading="saving" @click="handleSave">{{ t('common.save') }}</NButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-section shared-memory-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <span class="section-title">共享记忆</span>
+              <span class="section-mtime">长期保存，按需检索</span>
+            </div>
+            <NButton size="tiny" quaternary @click="openFamilyLogModal">新增</NButton>
+          </div>
+          <div class="section-body family-log-body">
+            <div class="family-log-toolbar">
+              <NInput v-model:value="familyLogQuery" size="small" clearable placeholder="搜索成员、标签或内容" @keyup.enter="loadFamilyLogs" />
+              <NSelect v-model:value="familyLogMinImportance" size="small" class="family-log-importance-select" :options="importanceOptions" @update:value="loadFamilyLogs" />
+              <NButton size="small" @click="loadFamilyLogs">搜索</NButton>
+            </div>
+            <div v-if="familyLogsEmpty" class="empty-text">暂无共享记忆</div>
+            <div v-else class="family-log-list">
+              <article v-for="log in familyLogs" :key="log.id" class="family-log-item">
+                <div class="family-log-title-row">
+                  <strong>{{ log.title }}</strong>
+                  <span>{{ formatFullTime(log.occurred_at) }}</span>
+                </div>
+                <p>{{ log.content }}</p>
+                <div class="family-log-meta">
+                  <span v-if="log.member_id">{{ log.member_id }}</span>
+                  <span v-if="log.gateway_id">{{ log.gateway_id }}</span>
+                  <span v-if="log.tags">{{ log.tags }}</span>
+                  <span>重要度 {{ log.importance }}</span>
+                </div>
+                <div class="family-log-actions">
+                  <NButton size="tiny" quaternary @click="openEditFamilyLogModal(log)">编辑</NButton>
+                  <NPopconfirm @positive-click="handleDeleteFamilyLog(log.id)">
+                    <template #trigger>
+                      <NButton size="tiny" quaternary type="error">删除</NButton>
+                    </template>
+                    删除这条共享记忆？
+                  </NPopconfirm>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <NModal v-model:show="familyLogModalVisible" preset="dialog" :title="familyLogModalTitle" positive-text="保存" negative-text="取消" :positive-button-props="{ loading: familyLogSaving }" @positive-click="handleSaveFamilyLog">
@@ -423,7 +315,7 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
           <input v-model="familyLogForm.occurred_at" class="native-input" type="datetime-local" />
         </NFormItem>
         <NFormItem label="标题">
-          <NInput v-model:value="familyLogForm.title" placeholder="例如：爷爷下周三复诊" />
+          <NInput v-model:value="familyLogForm.title" placeholder="例如：下周三复诊 / 客户下周回访 / 项目节点确认" />
         </NFormItem>
         <NFormItem label="内容">
           <NInput v-model:value="familyLogForm.content" type="textarea" placeholder="记录事实、决定、时间点、地点、涉及成员等" />
@@ -436,7 +328,7 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
         </NFormItem>
         <NFormItem label="标签 / 重要度">
           <div class="family-log-form-row">
-            <NInput v-model:value="familyLogForm.tags" placeholder="健康,日程,家庭" />
+            <NInput v-model:value="familyLogForm.tags" placeholder="健康,日程,项目,客户,偏好" />
             <NInputNumber v-model:value="familyLogForm.importance" :min="1" :max="5" />
           </div>
         </NFormItem>
@@ -473,7 +365,7 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
 
 .memory-sections {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   flex: 1;
   min-height: 0;
@@ -492,93 +384,9 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   flex-direction: column;
 }
 
-.family-log-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.family-log-toolbar {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.family-log-importance-select {
-  width: 124px;
-  flex-shrink: 0;
-}
-
-.family-log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.family-log-item {
-  padding: 10px;
-  border: 1px solid $border-color;
-  border-radius: $radius-sm;
-  background: $bg-secondary;
-
-  p {
-    margin: 8px 0;
-    color: $text-primary;
-    font-size: 13px;
-    line-height: 1.6;
-  }
-}
-
-.family-log-title-row,
-.family-log-meta,
-.family-log-form-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.family-log-title-row {
-  justify-content: space-between;
-
-  span {
-    color: $text-muted;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-}
-
-.family-log-meta {
-  flex-wrap: wrap;
-
-  span {
-    color: $text-muted;
-    font-size: 11px;
-    background: rgba(127, 127, 127, 0.08);
-    border-radius: 999px;
-    padding: 2px 8px;
-  }
-}
-
-.family-log-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.family-log-form-row {
-  width: 100%;
-}
-
-.native-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid $border-color;
-  border-radius: $radius-sm;
-  background: $bg-input;
-  color: $text-primary;
-  outline: none;
+.shared-memory-section {
+  grid-column: 1 / -1;
+  min-height: 280px;
 }
 
 .section-header {
@@ -591,15 +399,13 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   flex-shrink: 0;
 }
 
-.section-title-row {
+.section-title-row,
+.family-log-title-row,
+.family-log-meta,
+.family-log-form-row {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.section-icon {
-  color: $text-secondary;
-  display: flex;
 }
 
 .section-title {
@@ -654,10 +460,80 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
   }
 }
 
-.edit-actions {
+.edit-actions,
+.family-log-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 10px;
+}
+
+.family-log-body,
+.family-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.family-log-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.family-log-importance-select {
+  width: 132px;
+  flex-shrink: 0;
+}
+
+.family-log-item {
+  padding: 10px;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
+  background: $bg-secondary;
+
+  p {
+    margin: 8px 0;
+    color: $text-primary;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.family-log-title-row {
+  justify-content: space-between;
+
+  span {
+    color: $text-muted;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+.family-log-meta {
+  flex-wrap: wrap;
+
+  span {
+    color: $text-muted;
+    font-size: 11px;
+    background: rgba(127, 127, 127, 0.08);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+}
+
+.family-log-form-row {
+  width: 100%;
+}
+
+.native-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
+  background: $bg-input;
+  color: $text-primary;
+  outline: none;
 }
 </style>

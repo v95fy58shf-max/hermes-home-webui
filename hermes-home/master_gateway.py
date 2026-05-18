@@ -32,6 +32,7 @@ ROOT = Path("/opt/hermes-home")
 CONFIG_PATH = ROOT / "config.yaml"
 DB_PATH = ROOT / "home.db"
 CONFIG_LOCK = threading.Lock()
+HOME_SLAVE_ALLOW_ALL = ["*"]
 
 
 def load_config() -> dict[str, Any]:
@@ -74,6 +75,24 @@ def save_config(cfg: dict[str, Any]) -> None:
             yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
+
+
+def normalize_slave_allowlists() -> None:
+    """Registered member gateways should not be pinned to stale WeChat OpenIDs."""
+    cfg = load_config()
+    slaves = cfg.get("slaves")
+    if not isinstance(slaves, dict):
+        return
+    changed = False
+    for gateway_id, slave in slaves.items():
+        if not isinstance(slave, dict):
+            continue
+        if slave.get("allowed_user_ids") != HOME_SLAVE_ALLOW_ALL:
+            slave["allowed_user_ids"] = list(HOME_SLAVE_ALLOW_ALL)
+            changed = True
+            log_line(f"normalized allowlist gateway_id={gateway_id} allowed_user_ids=*")
+    if changed:
+        save_config(cfg)
 
 
 def init_db() -> None:
@@ -210,8 +229,8 @@ def save_member_identity_log(gateway_id: str, member_name: str, event: dict[str,
                 gateway_id,
                 member_name,
                 str((event.get("source") or {}).get("platform") or ""),
-                "家庭成员身份确认",
-                f"{gateway_id} 的家庭成员显示名设定为 {member_name}。",
+                "成员身份确认",
+                f"{gateway_id} 的成员显示名设定为 {member_name}。",
                 "成员,身份,onboarding",
                 4,
                 json.dumps({"event": event, "member_name": member_name}, ensure_ascii=False),
@@ -221,6 +240,8 @@ def save_member_identity_log(gateway_id: str, member_name: str, event: dict[str,
 
 
 def is_allowed(slave: dict[str, Any], event: dict[str, Any]) -> bool:
+    if slave.get("hermes_home"):
+        return True
     allowed = slave.get("allowed_user_ids") or []
     if isinstance(allowed, str):
         allowed = [x.strip() for x in allowed.split(",") if x.strip()]
@@ -330,11 +351,11 @@ def search_family_logs(text: str, limit: int = 6) -> list[dict[str, Any]]:
 def format_family_logs(logs: list[dict[str, Any]]) -> str:
     if not logs:
         return ""
-    lines = ["可按需参考的家庭日志（只在相关时使用，不要主动暴露内部机制）："]
+    lines = ["可按需参考的共享记忆（只在相关时使用，不要主动暴露内部机制）："]
     for item in logs:
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(int(item.get("occurred_at") or item.get("created_at") or time.time())))
         tags = item.get("tags") or ""
-        member = item.get("member_id") or item.get("gateway_id") or "家庭"
+        member = item.get("member_id") or item.get("gateway_id") or "共享"
         lines.append(f"- [{when}] {member}: {item.get('title', '')}。{item.get('content', '')} {tags}".strip())
     return "\n".join(lines)
 
@@ -392,10 +413,10 @@ def maybe_save_family_log(cfg: dict[str, Any], slave: dict[str, Any], event: dic
     source = event.get("source") or {}
     member_name = slave.get("member_name") or event.get("member_id") or event.get("gateway_id")
     now_text = time.strftime("%Y-%m-%d %H:%M:%S")
-    prompt = f"""你是家庭日志管理员。请使用 family-logs skill 的保存标准，判断这轮家庭成员对话是否值得长期保存到“家庭日志”。
+    prompt = f"""你是共享记忆管理员。请使用 shared-memory skill 的保存标准，判断这轮成员对话是否值得长期保存到“共享记忆”。
 
 保存标准要多方面判断，包括但不限于：
-- 多人或家庭共同相关的事实、决定、承诺、冲突、分工、共识
+- 多人或组织共同相关的事实、决定、承诺、冲突、分工、共识
 - 明确时间点、地点、预约、日程、待办、截止日期
 - 健康、用药、复诊、学校、工作、财务、合同、居住、旅行等长期有用信息
 - 成就、大事件、里程碑，例如获奖、升学、毕业、入职、升职、搬家、结婚、出生、重要纪念日
@@ -416,7 +437,7 @@ AI回复：{reply}
   "occurred_at": "YYYY-MM-DD HH:MM",
   "title": "短标题",
   "content": "可长期检索的一段事实记录",
-  "tags": ["健康","日程","成就","家庭决定","偏好","大事件"] 中选择或自定义,
+  "tags": ["健康","日程","成就","组织决定","偏好","大事件"] 中选择或自定义,
   "importance": 1-5
 }}
 """
@@ -437,18 +458,18 @@ AI回复：{reply}
 def build_prompt(cfg: dict[str, Any], slave: dict[str, Any], event: dict[str, Any]) -> str:
     source = event.get("source") or {}
     member_name = slave.get("member_name") or event.get("member_id") or event.get("gateway_id")
-    household = cfg.get("household_name") or "家庭"
+    household = cfg.get("household_name") or cfg.get("workspace_name") or "组织"
     text = event.get("text") or ""
     family_context = format_family_logs(search_family_logs(text))
     family_context_block = f"\n{family_context}\n" if family_context else ""
-    return f"""你是 {household} 的主网关家庭 agent。
-如当前问题涉及长期家庭事实、家庭日志检索结果、多人共同背景、日程、健康、成就或大事件，请按 family-logs skill 的原则处理。
+    return f"""你是 {household} 的主网关 agent。
+如当前问题涉及长期共享事实、共享记忆检索结果、多人共同背景、日程、健康、成就或大事件，请按 shared-memory skill 的原则处理。
 
-当前消息来自家庭成员：{member_name}
+当前消息来自成员：{member_name}
 来源渠道：{source.get("platform", "unknown")}
 会话类型：{source.get("chat_type", "dm")}
 
-请只回复要发给这个家庭成员的一段微信消息。不要解释系统架构，不要输出 JSON。
+请只回复要发给这个成员的一段微信消息。不要解释系统架构，不要输出 JSON。
 如果用户要求控制门锁、支付、下单、安防关闭等高风险动作，必须先要求确认。
 {family_context_block}
 
@@ -532,7 +553,7 @@ def process_event(event: dict[str, Any]) -> None:
                 reply = "我识别到你的称呼了，但保存身份时出了点问题，稍后可以再告诉我一次。"
                 log_line(f"onboarding save error gateway_id={gateway_id}: {exc}")
         else:
-            reply = "欢迎加入家庭 Hermes。我需要先知道怎么称呼你，请直接回复一句，比如“我是妈妈”“我叫张三”或“叫我小王”。"
+            reply = "欢迎加入 Hermes。我需要先知道怎么称呼你，请直接回复一句，比如“我是张三”“我叫小王”或“叫我李经理”。"
             log_line(f"onboarding ask gateway_id={gateway_id}")
         try:
             result = asyncio.run(send_weixin(slave, chat_id, reply))
@@ -613,6 +634,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    normalize_slave_allowlists()
     init_db()
     cfg = load_config()
     host = str(cfg.get("listen_host") or "127.0.0.1")
