@@ -1,5 +1,4 @@
 household_name: "Hermes Home"
-family_id: "default-family"
 listen_host: "127.0.0.1"
 listen_port: 18080
 workers: 1

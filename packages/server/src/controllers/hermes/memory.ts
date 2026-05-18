@@ -24,17 +24,6 @@ function openHomeDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_family_logs_occurred_at ON family_logs(occurred_at DESC);
     CREATE INDEX IF NOT EXISTS idx_family_logs_member_id ON family_logs(member_id);
   `)
-  for (const ddl of [
-    "ALTER TABLE family_logs ADD COLUMN family_id TEXT DEFAULT 'default'",
-    "ALTER TABLE family_logs ADD COLUMN scope TEXT DEFAULT 'family_shared'",
-    "ALTER TABLE family_logs ADD COLUMN confidence REAL DEFAULT 1",
-  ]) {
-    try {
-      db.exec(ddl)
-    } catch (err: any) {
-      if (!String(err.message || '').toLowerCase().includes('duplicate column')) throw err
-    }
-  }
   return db
 }
 
@@ -117,7 +106,6 @@ export async function addFamilyLog(ctx: any) {
     member_id?: string
     gateway_id?: string
     source?: string
-    scope?: string
     title?: string
     content?: string
     tags?: string
@@ -152,9 +140,6 @@ export async function addFamilyLog(ctx: any) {
         importance,
         JSON.stringify({ manual: true }),
       )
-      if (body.scope) {
-        db.prepare('UPDATE family_logs SET scope = ? WHERE id = ?').run(String(body.scope), result.lastInsertRowid)
-      }
       ctx.body = { success: true, id: result.lastInsertRowid }
     } finally {
       db.close()
@@ -177,7 +162,6 @@ export async function updateFamilyLog(ctx: any) {
     member_id?: string
     gateway_id?: string
     source?: string
-    scope?: string
     title?: string
     content?: string
     tags?: string
@@ -211,9 +195,6 @@ export async function updateFamilyLog(ctx: any) {
         importance,
         id,
       )
-      if (body.scope) {
-        db.prepare('UPDATE family_logs SET scope = ? WHERE id = ?').run(String(body.scope), id)
-      }
       if (result.changes === 0) {
         ctx.status = 404
         ctx.body = { error: 'Family log not found' }

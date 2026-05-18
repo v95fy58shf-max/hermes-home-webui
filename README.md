@@ -11,7 +11,7 @@ This project is based on:
 - Hermes Agent: https://github.com/NousResearch/hermes-agent
 - Hermes Web UI: https://github.com/EKKOLearnAI/hermes-web-ui
 
-Original copyrights and licenses belong to their respective authors. This repository keeps the upstream Web UI foundation and adds the household gateway layer, multi-WeChat gateway management, family logs, and the phase-2 family state system foundation.
+Original copyrights and licenses belong to their respective authors. This repository keeps the upstream Web UI foundation and adds the household gateway layer, multi-WeChat gateway management, and family logs.
 
 ## What This Fork Adds
 
@@ -24,7 +24,6 @@ Original copyrights and licenses belong to their respective authors. This reposi
 - Gateway display-name sync based on replies such as `我是妈妈`, `我叫张三`, or `叫我小王`.
 - Long-term family logs stored separately from personal chat context.
 - Family log search, importance filtering, manual add, edit, and delete.
-- Phase 2 family state infrastructure: Event Bus, State Engine, Privacy Scope, Memory Router, Relationship Graph, Decay Worker, and expert analyzers.
 
 ## Why It Exists
 
@@ -33,7 +32,6 @@ Hermes works well as a personal agent, but a household setup needs stronger isol
 - each family member needs a separate WeChat login state;
 - WeChat credentials must not be copied between profiles;
 - shared family facts should be durable but should not pollute each person's normal chat context;
-- private raw messages should not be forwarded as shared family memory;
 - Hermes itself should stay updateable.
 
 This fork solves that by adding a home layer around Hermes rather than patching Hermes core.
@@ -44,8 +42,6 @@ This fork solves that by adding a home layer around Hermes rather than patching 
 hermes-home/
   master_gateway.py
   config.example.yaml
-  core/
-  analyzers/
   plugins/home_slave_relay/
   skills/family-logs/SKILL.md
   systemd/hermes-home-master.service

@@ -47,7 +47,6 @@ export interface FamilyLogEntry {
   gateway_id: string
   member_id: string
   source: string
-  scope?: string
   title: string
   content: string
   tags: string
@@ -139,7 +138,6 @@ export async function addFamilyLog(data: {
   gateway_id?: string
   member_id?: string
   source?: string
-  scope?: string
   title: string
   content: string
   tags?: string
@@ -156,7 +154,6 @@ export async function updateFamilyLog(id: number, data: {
   gateway_id?: string
   member_id?: string
   source?: string
-  scope?: string
   title: string
   content: string
   tags?: string
