@@ -1,5 +1,14 @@
 # Hermes 多成员 WebUI
 
+## 维护基准仓库
+
+本项目的维护基准仓库是：
+
+https://github.com/v95fy58shf-max/hermes-home-webui
+
+后续修复、重新部署或对比行为时，应优先参考这个仓库。不要只以原版 EKKOLearnAI/hermes-web-ui 为准，否则会把本项目故意保留的多网关选项卡、master 默认 profile、隐藏 default、删除用户切换器等改造误删。
+
+
 这是一个面向多成员场景改造的 Hermes Web UI 版本。它可以用于家庭，也可以用于小团队、企业、工作室或其他需要多个微信入口的组织。
 
 核心原则：不修改 Hermes Agent 本体。Hermes 仍然可以按上游方式更新；多成员能力通过 Web UI、主网关、从网关插件和共享记忆层实现。

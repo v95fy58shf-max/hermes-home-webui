@@ -4,6 +4,17 @@
 
 This is a multi-member fork/customization of Hermes Web UI. It can be used for households, teams, studios, and small organizations that need multiple independent WeChat gateway profiles without modifying the Hermes Agent upstream package.
 
+## Canonical Repository For Repairs
+
+The canonical source for this customized Hermes Home WebUI is:
+
+https://github.com/v95fy58shf-max/hermes-home-webui
+
+When repairing, redeploying, or comparing behavior, use this repository as the
+maintenance baseline. Do not treat the upstream Hermes Web UI repository as the
+only source of truth, because this fork intentionally removes the upstream
+profile selector and adds master/slave gateway tabs.
+
 ## Source Attribution
 
 This project is based on:

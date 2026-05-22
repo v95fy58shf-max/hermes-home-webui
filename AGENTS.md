@@ -4,6 +4,14 @@ This repository is not the upstream Hermes Web UI in its original form.
 It is the Hermes Home / multi-member gateway fork used to manage one master
 gateway and multiple independent slave gateways on a single server.
 
+Canonical maintenance repository:
+
+https://github.com/v95fy58shf-max/hermes-home-webui
+
+When repairing or redeploying this project, compare against the canonical
+repository above first. Do not fetch upstream `EKKOLearnAI/hermes-web-ui` and
+use it as the only baseline; that will erase intentional Hermes Home behavior.
+
 Any AI agent or maintainer working in this repository must preserve the
 following behavior unless the project owner explicitly asks to revert it.
 
@@ -44,4 +52,3 @@ following behavior unless the project owner explicitly asks to revert it.
 Future repair work can easily mistake this fork for upstream `hermes-web-ui` and
 "fix" the custom behavior away. That is a regression. The absence of the sidebar
 profile selector and the presence of gateway tabs are intentional features.
-
