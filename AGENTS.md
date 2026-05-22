@@ -12,6 +12,12 @@ When repairing or redeploying this project, compare against the canonical
 repository above first. Do not fetch upstream `EKKOLearnAI/hermes-web-ui` and
 use it as the only baseline; that will erase intentional Hermes Home behavior.
 
+Preferred install/redeploy command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/v95fy58shf-max/hermes-home-webui/main/scripts/install-hermes-home-webui.sh | sudo bash
+```
+
 Any AI agent or maintainer working in this repository must preserve the
 following behavior unless the project owner explicitly asks to revert it.
 

@@ -15,6 +15,22 @@ maintenance baseline. Do not treat the upstream Hermes Web UI repository as the
 only source of truth, because this fork intentionally removes the upstream
 profile selector and adds master/slave gateway tabs.
 
+## One-Click Install
+
+Run this on a fresh Linux server as root or with `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/v95fy58shf-max/hermes-home-webui/main/scripts/install-hermes-home-webui.sh | sudo bash
+```
+
+The installer clones this repository, builds the customized Web UI, installs it
+under `/usr/lib/node_modules/hermes-web-ui`, installs the Hermes Home master
+layer under `/opt/hermes-home`, writes `hermes-web-ui.service`, and starts the
+service on port `8648`.
+
+Hermes Agent itself must still be installed separately. After installation, open
+`http://SERVER_IP:8648`, then create slave gateways from the Gateway page.
+
 ## Source Attribution
 
 This project is based on:
